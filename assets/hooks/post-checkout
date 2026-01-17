@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "$ROOT" ]; then
+  exit 0
+fi
+cd "$ROOT"
+
+if [ ! -f ".git-ai/lancedb.tar.gz" ]; then
+  exit 0
+fi
+
+if ! command -v git-ai >/dev/null 2>&1; then
+  exit 0
+fi
+
+git-ai ai unpack -p "$ROOT" >/dev/null
+

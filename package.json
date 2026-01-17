@@ -1,0 +1,44 @@
+{
+  "name": "git-ai",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "bin": {
+    "git-ai": "./dist/bin/git-ai.js"
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node bin/git-ai.ts",
+    "test": "npm run build && node --test"
+  },
+  "files": [
+    "dist/**",
+    "docs/**",
+    "assets/**",
+    "README.md"
+  ],
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@lancedb/lancedb": "^0.23.0",
+    "@lancedb/lancedb-darwin-x64": "^0.22.3",
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^25.0.9",
+    "apache-arrow": "^18.1.0",
+    "commander": "^14.0.2",
+    "fs-extra": "^11.3.3",
+    "glob": "^13.0.0",
+    "simple-git": "^3.30.0",
+    "tar": "^7.5.3",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-typescript": "^0.23.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "zod": "^4.3.5"
+  }
+}

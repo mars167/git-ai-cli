@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "$ROOT" ]; then
+  exit 0
+fi
+cd "$ROOT"
+
+if ! command -v git-ai >/dev/null 2>&1; then
+  exit 0
+fi
+
+git-ai ai index --overwrite -p "$ROOT" >/dev/null
+git-ai ai pack -p "$ROOT" >/dev/null
+
+if git lfs version >/dev/null 2>&1; then
+  git lfs track ".git-ai/lancedb.tar.gz" >/dev/null 2>&1 || true
+  git add .gitattributes || true
+fi
+
+git add .git-ai/meta.json .git-ai/lancedb.tar.gz || true
