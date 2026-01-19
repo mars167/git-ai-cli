@@ -4,7 +4,12 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name to release (e.g. v1.2.3). If empty, skip release/publish steps."
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -13,9 +18,17 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout input tag
+        if: ${{ inputs.tag != '' && github.ref_type != 'tag' }}
+        run: git checkout "${{ inputs.tag }}"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -43,11 +56,14 @@ jobs:
           path: ${{ steps.pack.outputs.tarball }}
 
       - name: Create GitHub Release (attach tarball)
+        if: ${{ env.RELEASE_TAG != '' }}
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: ${{ steps.pack.outputs.tarball }}
 
       - name: Publish to GitHub Packages (npm.pkg.github.com)
+        if: ${{ env.RELEASE_TAG != '' }}
         run: |
           npm config set registry https://npm.pkg.github.com
           npm pkg set name="@${{ github.repository_owner }}/git-ai"
@@ -58,7 +74,7 @@ jobs:
       - name: Publish to npmjs.org (optional)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        if: ${{ env.NODE_AUTH_TOKEN != '' }}
+        if: ${{ env.RELEASE_TAG != '' && env.NODE_AUTH_TOKEN != '' }}
         run: |
           npm config set registry https://registry.npmjs.org
           npm publish --access public
