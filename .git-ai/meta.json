@@ -1,8 +1,8 @@
 {
   "version": "2.0",
   "dim": 256,
-  "files": 19,
-  "chunksAdded": 36,
-  "refsAdded": 36,
+  "files": 23,
+  "chunksAdded": 51,
+  "refsAdded": 51,
   "dbDir": ".git-ai/lancedb"
 }

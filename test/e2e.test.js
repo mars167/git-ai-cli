@@ -33,6 +33,7 @@ async function createRepo(baseDir, name, files) {
   runOk('git', ['init', '-b', 'main'], repoDir);
   runOk('git', ['config', 'user.email', 'test@example.com'], repoDir);
   runOk('git', ['config', 'user.name', 'Test User'], repoDir);
+  await writeFile(path.join(repoDir, '.gitignore'), '.git-ai/lancedb/\n');
   for (const [rel, content] of Object.entries(files)) {
     await writeFile(path.join(repoDir, rel), content);
   }
@@ -66,6 +67,8 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     runOk('node', [CLI, 'status'], repo);
     runOk('node', [CLI, 'ai', 'index', '--overwrite'], repo);
     runOk('node', [CLI, 'ai', 'pack'], repo);
+    runOk('git', ['add', '.git-ai/meta.json', '.git-ai/lancedb.tar.gz'], repo);
+    runOk('git', ['commit', '-m', 'add git-ai index'], repo);
 
     const meta = await fs.readFile(path.join(repo, '.git-ai', 'meta.json'), 'utf-8');
     assert.ok(meta.includes('"version"'));
@@ -91,4 +94,3 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     runOk('node', [CLI, 'push', '-u', 'origin', 'main'], repo);
   }
 });
-

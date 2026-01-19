@@ -3,4 +3,5 @@ dist/
 .DS_Store
 
 .git-ai/lancedb/
+.git-ai/._*
 .tmp-hook-test/

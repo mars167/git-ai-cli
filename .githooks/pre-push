@@ -13,7 +13,7 @@ fi
 
 git-ai ai pack -p "$ROOT" >/dev/null
 
-CHANGED="$(git status --porcelain -- .git-ai/lancedb.tar.gz .gitattributes 2>/dev/null || true)"
+CHANGED="$(git status --porcelain -- .git-ai/lancedb.tar.gz 2>/dev/null || true)"
 if [ -n "$CHANGED" ]; then
   echo "git-ai: .git-ai/lancedb.tar.gz changed during pre-push; please commit it before pushing." 1>&2
   exit 1

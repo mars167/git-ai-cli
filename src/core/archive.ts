@@ -22,7 +22,31 @@ export async function packLanceDb(repoRoot: string): Promise<{ archivePath: stri
     return { archivePath, packed: false };
   }
   await fs.remove(archivePath);
-  await tar.c({ gzip: true, file: archivePath, cwd: gitAiDir }, ['lancedb']);
+  const entries: string[] = [];
+  const walk = async (rel: string) => {
+    const abs = path.join(gitAiDir, rel);
+    const stat = await fs.stat(abs);
+    if (stat.isDirectory()) {
+      const children = (await fs.readdir(abs)).sort((a, b) => a.localeCompare(b));
+      for (const c of children) {
+        await walk(path.join(rel, c));
+      }
+      return;
+    }
+    entries.push(rel);
+  };
+  await walk('lancedb');
+
+  await tar.c(
+    {
+      gzip: { portable: true },
+      file: archivePath,
+      cwd: gitAiDir,
+      portable: true,
+      mtime: new Date(0),
+    },
+    entries.sort((a, b) => a.localeCompare(b))
+  );
   return { archivePath, packed: true };
 }
 

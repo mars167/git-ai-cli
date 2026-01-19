@@ -16,3 +16,4 @@ if ! command -v git-ai >/dev/null 2>&1; then
 fi
 
 git-ai ai unpack -p "$ROOT" >/dev/null
+

@@ -23,13 +23,15 @@
   "author": "",
   "license": "ISC",
   "description": "",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "@lancedb/lancedb": "^0.23.0",
-    "@lancedb/lancedb-darwin-x64": "^0.22.3",
+    "@lancedb/lancedb": "0.22.3",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^25.0.9",
-    "apache-arrow": "^18.1.0",
+    "apache-arrow": "18.1.0",
     "commander": "^14.0.2",
     "fs-extra": "^11.3.3",
     "glob": "^13.0.0",
@@ -40,5 +42,15 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "zod": "^4.3.5"
+  },
+  "optionalDependencies": {
+    "@lancedb/lancedb-darwin-x64": "0.22.3",
+    "@lancedb/lancedb-darwin-arm64": "0.22.3",
+    "@lancedb/lancedb-linux-x64-gnu": "0.22.3",
+    "@lancedb/lancedb-linux-arm64-gnu": "0.22.3",
+    "@lancedb/lancedb-linux-x64-musl": "0.22.3",
+    "@lancedb/lancedb-linux-arm64-musl": "0.22.3",
+    "@lancedb/lancedb-win32-x64-msvc": "0.22.3",
+    "@lancedb/lancedb-win32-arm64-msvc": "0.22.3"
   }
 }

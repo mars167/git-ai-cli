@@ -3,7 +3,6 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import fs from 'fs-extra';
 import { resolveGitRoot } from '../core/git';
-import { ensureLfsTracking } from '../core/lfs';
 
 function runGit(cwd: string, args: string[]) {
   const res = spawnSync('git', args, { cwd, stdio: 'inherit' });
@@ -72,7 +71,6 @@ async function installHookTemplates(repoRoot: string): Promise<{ installed: stri
 const install = new Command('install')
   .description('Install git hooks (write .githooks/* and set core.hooksPath=.githooks)')
   .option('-p, --path <path>', 'Path inside the repository', '.')
-  .option('--no-lfs', 'Do not run git lfs track for .git-ai/lancedb.tar.gz', false)
   .action(async (options) => {
     const repoRoot = await resolveGitRoot(path.resolve(options.path));
     if (!isGitRepo(repoRoot)) {
@@ -83,9 +81,8 @@ const install = new Command('install')
     const templates = await installHookTemplates(repoRoot);
     const exec = await ensureHooksExecutable(repoRoot);
     runGit(repoRoot, ['config', 'core.hooksPath', '.githooks']);
-    const lfs = options.lfs !== false ? ensureLfsTracking(repoRoot, '.git-ai/lancedb.tar.gz') : { tracked: false };
     const hooksPath = getGitConfig(repoRoot, 'core.hooksPath');
-    console.log(JSON.stringify({ ok: true, repoRoot, hooksPath, templates, executable: exec, lfs }, null, 2));
+    console.log(JSON.stringify({ ok: true, repoRoot, hooksPath, templates, executable: exec }, null, 2));
   });
 
 const uninstall = new Command('uninstall')
