@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "bin": {
-    "git-ai": "./dist/bin/git-ai.js"
+    "git-ai": "dist/bin/git-ai.js"
   },
   "directories": {
     "doc": "docs"

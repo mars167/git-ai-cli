@@ -30,7 +30,7 @@ jobs:
         if: ${{ inputs.tag != '' && github.ref_type != 'tag' }}
         run: git checkout "${{ inputs.tag }}"
 
-      - name: Setup Node
+      - name: Setup Node (build/test)
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -62,19 +62,32 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           files: ${{ steps.pack.outputs.tarball }}
 
+      - name: Setup Node (GitHub Packages)
+        if: ${{ env.RELEASE_TAG != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@${{ github.repository_owner }}"
+
       - name: Publish to GitHub Packages (npm.pkg.github.com)
         if: ${{ env.RELEASE_TAG != '' }}
         run: |
-          npm config set registry https://npm.pkg.github.com
           npm pkg set name="@${{ github.repository_owner }}/git-ai"
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node (npmjs.org)
+        if: ${{ env.RELEASE_TAG != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Publish to npmjs.org (optional)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         if: ${{ env.RELEASE_TAG != '' && env.NODE_AUTH_TOKEN != '' }}
         run: |
-          npm config set registry https://registry.npmjs.org
           npm publish --access public
