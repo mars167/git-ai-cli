@@ -1,5 +1,10 @@
 # git-ai
 
+[![ci](https://github.com/mars167/git-ai-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/mars167/git-ai-cli/actions/workflows/ci.yml)
+[![release](https://github.com/mars167/git-ai-cli/actions/workflows/release.yml/badge.svg)](https://github.com/mars167/git-ai-cli/actions/workflows/release.yml)
+[![license](https://img.shields.io/github/license/mars167/git-ai-cli)](./LICENSE)
+[![npm (github packages)](https://img.shields.io/npm/v/%40mars167%2Fgit-ai?registry_uri=https%3A%2F%2Fnpm.pkg.github.com)](https://github.com/mars167/git-ai-cli/packages)
+
 `git-ai` 是一个全局命令行工具：默认行为与 `git` 保持一致（代理系统 git），同时提供 `ai` 子命令用于代码索引与检索能力。
 
 ## 安装
@@ -128,3 +133,7 @@ git-ai ai pack --lfs
 ```bash
 git lfs pull
 ```
+
+## License
+
+[MIT](./LICENSE)

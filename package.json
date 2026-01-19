@@ -20,9 +20,17 @@
     "README.md"
   ],
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "author": "mars167",
+  "license": "MIT",
+  "description": "A git-compatible CLI with AI indexing/search and an MCP server.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mars167/git-ai-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mars167/git-ai-cli/issues"
+  },
+  "homepage": "https://github.com/mars167/git-ai-cli#readme",
   "engines": {
     "node": ">=18"
   },
