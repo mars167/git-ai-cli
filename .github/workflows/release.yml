@@ -56,10 +56,9 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to npmjs.org (optional)
-        if: ${{ secrets.NPM_TOKEN != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: ${{ env.NODE_AUTH_TOKEN != '' }}
         run: |
           npm config set registry https://registry.npmjs.org
           npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
