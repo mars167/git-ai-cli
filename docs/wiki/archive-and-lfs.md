@@ -13,6 +13,7 @@ git-ai ai unpack
 如果仓库安装了 git-lfs，推荐对 `.git-ai/lancedb.tar.gz` 使用 LFS：
 
 ```bash
+git lfs install
 git lfs track ".git-ai/lancedb.tar.gz"
 git add .gitattributes
 git commit -m "track lancedb archive via lfs"

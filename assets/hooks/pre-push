@@ -18,3 +18,12 @@ if [ -n "$CHANGED" ]; then
   echo "git-ai: .git-ai/lancedb.tar.gz changed during pre-push; please commit it before pushing." 1>&2
   exit 1
 fi
+
+LFS_REQUIRED="$(git check-attr filter -- .git-ai/lancedb.tar.gz 2>/dev/null | grep -q 'filter: lfs' && echo 1 || echo 0)"
+if [ "$LFS_REQUIRED" = "1" ]; then
+  if ! git lfs version >/dev/null 2>&1; then
+    echo "git-ai: repository requires git-lfs to push LFS objects; please install git-lfs." 1>&2
+    exit 2
+  fi
+  git lfs pre-push "$@"
+fi

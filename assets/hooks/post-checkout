@@ -11,9 +11,18 @@ if [ ! -f ".git-ai/lancedb.tar.gz" ]; then
   exit 0
 fi
 
+LFS_REQUIRED="$(git check-attr filter -- .git-ai/lancedb.tar.gz 2>/dev/null | grep -q 'filter: lfs' && echo 1 || echo 0)"
+if [ "$LFS_REQUIRED" = "1" ]; then
+  if git lfs version >/dev/null 2>&1; then
+    git lfs post-checkout "$@"
+  else
+    echo "git-ai: repository requires git-lfs to fetch .git-ai/lancedb.tar.gz; please install git-lfs." 1>&2
+    exit 0
+  fi
+fi
+
 if ! command -v git-ai >/dev/null 2>&1; then
   exit 0
 fi
 
 git-ai ai unpack -p "$ROOT" >/dev/null
-

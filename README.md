@@ -102,4 +102,29 @@ git-ai ai hooks status
 - `pre-commit`：自动 `index --overwrite` + `pack`，并把 `.git-ai/meta.json` 与 `.git-ai/lancedb.tar.gz` 加入暂存区。
 - `pre-push`：再次 `pack`，若归档发生变化则阻止 push，提示先提交归档文件。
 - `post-checkout` / `post-merge`：若存在 `.git-ai/lancedb.tar.gz` 则自动 `unpack`。
-- 如需使用 git-lfs 管理归档文件，可手动执行：`git lfs track .git-ai/lancedb.tar.gz`（或运行 `git-ai ai pack --lfs`）。
+
+## Git LFS（推荐，用于 .git-ai/lancedb.tar.gz）
+
+为了避免把较大的索引归档直接存进 Git 历史，推荐对 `.git-ai/lancedb.tar.gz` 启用 Git LFS。
+
+### 开启（一次性）
+
+```bash
+git lfs install
+git lfs track ".git-ai/lancedb.tar.gz"
+git add .gitattributes
+git commit -m "chore: track lancedb archive via git-lfs"
+```
+
+也可以用 `git-ai` 触发（仅在已安装 git-lfs 的情况下生效）：
+
+```bash
+git-ai ai pack --lfs
+```
+
+### 克隆/切分支后（如果未自动拉取 LFS）
+如果你环境设置了 `GIT_LFS_SKIP_SMUDGE=1`，或发现 `.git-ai/lancedb.tar.gz` 不是有效的 gzip 文件：
+
+```bash
+git lfs pull
+```
