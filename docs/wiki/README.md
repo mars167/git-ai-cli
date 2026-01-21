@@ -10,6 +10,7 @@
 - [Hooks 工作流](./hooks.md)
 - [MCP Server 接入](./mcp.md)
 - [索引归档与 LFS](./archive-and-lfs.md)
+- [Manifest Workspace 索引支持](./manifest-workspace.md)
 - [排障](./troubleshooting.md)
 
 ## Agent 集成
