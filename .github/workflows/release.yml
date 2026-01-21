@@ -43,6 +43,13 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Sync version from Tag
+        if: ${{ env.RELEASE_TAG != '' }}
+        run: |
+          VERSION=${RELEASE_TAG#v}
+          echo "Syncing version to $VERSION"
+          npm version $VERSION --no-git-tag-version --allow-same-version
+
       - name: Pack
         id: pack
         run: |

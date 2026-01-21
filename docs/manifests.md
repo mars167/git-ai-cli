@@ -52,20 +52,20 @@ git-ai ai query SomeClass --limit 20
 ### 流程图（按需查询）
 
 ```mermaid
-flowchart TD
-  A[用户在 .repo/manifests 运行 git-ai ai query] --> B[resolveGitRoot 定位 repoRoot]
-  B --> C[inferWorkspaceRoot: repoRoot 上溯到 workspace 根]
-  C --> D[解析 default.xml 得到 projects]
-  D --> E{project 在 workspace 是否已存在?}
-  E -- 是 --> F[直接使用 workspace/<path>]
-  E -- 否 --> G[clone 到 repoRoot/.git-ai/workspace-cache/<path>]
-  F --> H[checkout revision(如有)]
-  G --> H
-  H --> I{子仓库是否已有索引?}
-  I -- 有 --> J[直接查询子仓库 refs/chunks]
-  I -- 无 --> K[在子仓库内构建索引后再查询]
-  J --> L[聚合结果输出（带 project 信息）]
-  K --> L
+graph TD
+  A["用户在 .repo/manifests 运行 git-ai ai query"] --> B["resolveGitRoot 定位 repoRoot"];
+  B --> C["inferWorkspaceRoot: repoRoot 上溯到 workspace 根"];
+  C --> D["解析 default.xml 得到 projects"];
+  D --> E{"project 在 workspace 是否已存在?"};
+  E -->|是| F["直接使用 workspace/{path}"];
+  E -->|否| G["clone 到 repoRoot/.git-ai/workspace-cache/{path}"];
+  F --> H["checkout revision(如有)"];
+  G --> H;
+  H --> I{"子仓库是否已有索引?"};
+  I -->|有| J["直接查询子仓库 refs/chunks"];
+  I -->|无| K["在子仓库内构建索引后再查询"];
+  J --> L["聚合结果输出（带 project 信息）"];
+  K --> L;
 ```
 
 ## 关键实现点
