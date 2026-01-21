@@ -65,7 +65,19 @@ export class IndexerV2 {
     const aiIgnore = await loadAiIgnorePatterns(this.repoRoot);
     const files = await glob('**/*.{ts,tsx,js,jsx,java}', {
       cwd: this.repoRoot,
-      ignore: ['node_modules/**', '.git/**', '.git-ai/**', 'dist/**', ...aiIgnore],
+      ignore: [
+        'node_modules/**',
+        '.git/**',
+        '.git-ai/**',
+        'dist/**',
+        'target/**',
+        '**/target/**',
+        'build/**',
+        '**/build/**',
+        '.gradle/**',
+        '**/.gradle/**',
+        ...aiIgnore,
+      ],
     });
 
     const chunkRows: any[] = [];
