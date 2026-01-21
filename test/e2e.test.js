@@ -54,8 +54,11 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'git-ai-e2e-'));
   const springRepo = await createRepo(tmp, 'spring-boot-jdk17', {
-    'pom.xml': `<?xml version="1.0" encoding="UTF-8"?>\n<project xmlns="http://maven.apache.org/POM/4.0.0">\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>com.example</groupId>\n  <artifactId>demo</artifactId>\n  <version>0.0.1</version>\n  <properties>\n    <java.version>17</java.version>\n  </properties>\n</project>\n`,
-    'src/main/java/com/example/demo/DemoApplication.java': 'package com.example.demo;\npublic class DemoApplication { public static void main(String[] args) {} }\n',
+    'pom.xml': `<?xml version="1.0" encoding="UTF-8"?>\n<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">\n  <modelVersion>4.0.0</modelVersion>\n  <parent>\n    <groupId>org.springframework.boot</groupId>\n    <artifactId>spring-boot-starter-parent</artifactId>\n    <version>3.3.7</version>\n    <relativePath/>\n  </parent>\n  <groupId>com.example</groupId>\n  <artifactId>demo</artifactId>\n  <version>0.0.1</version>\n  <properties>\n    <java.version>17</java.version>\n  </properties>\n  <dependencies>\n    <dependency>\n      <groupId>org.springframework.boot</groupId>\n      <artifactId>spring-boot-starter-web</artifactId>\n    </dependency>\n  </dependencies>\n</project>\n`,
+    'src/main/java/com/example/demo/DemoApplication.java': 'package com.example.demo;\n\nimport org.springframework.boot.SpringApplication;\nimport org.springframework.boot.autoconfigure.SpringBootApplication;\n\n@SpringBootApplication\npublic class DemoApplication {\n  public static void main(String[] args) {\n    SpringApplication.run(DemoApplication.class, args);\n  }\n}\n',
+    'src/main/java/com/example/demo/api/HelloController.java': 'package com.example.demo.api;\n\nimport com.example.demo.service.GreetingService;\nimport org.springframework.web.bind.annotation.GetMapping;\nimport org.springframework.web.bind.annotation.RequestParam;\nimport org.springframework.web.bind.annotation.RestController;\n\n@RestController\npublic class HelloController {\n  private final GreetingService greetingService;\n\n  public HelloController(GreetingService greetingService) {\n    this.greetingService = greetingService;\n  }\n\n  @GetMapping(\"/hello\")\n  public String hello(@RequestParam(defaultValue = \"world\") String name) {\n    return greetingService.greet(name).message();\n  }\n}\n',
+    'src/main/java/com/example/demo/model/Greeting.java': 'package com.example.demo.model;\n\npublic record Greeting(String message) {\n  public static Greeting of(String name) {\n    return new Greeting(\"hello \" + name);\n  }\n}\n',
+    'src/main/java/com/example/demo/service/GreetingService.java': 'package com.example.demo.service;\n\nimport com.example.demo.model.Greeting;\nimport org.springframework.stereotype.Service;\n\n@Service\npublic class GreetingService {\n  public Greeting greet(String name) {\n    return Greeting.of(name);\n  }\n}\n',
   });
   const vueRepo = await createRepo(tmp, 'vue-frontend', {
     'package.json': JSON.stringify({ name: 'vue-frontend', private: true, scripts: { dev: 'vite' } }, null, 2) + '\n',
@@ -86,6 +89,13 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     assert.equal(hooksPath, '.githooks');
     const hookFile = await fs.stat(path.join(repo, '.githooks', 'pre-commit'));
     assert.ok(hookFile.isFile());
+  }
+
+  {
+    const res = runOk('node', [CLI, 'ai', 'query', 'HelloController', '--limit', '10'], springRepo);
+    const obj = JSON.parse(res.stdout);
+    assert.ok(obj.count > 0);
+    assert.ok(obj.rows.some(r => String(r.file || '').endsWith('.java')));
   }
 
   for (const repo of [springRepo, vueRepo]) {

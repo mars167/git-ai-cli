@@ -63,7 +63,7 @@ export class IndexerV2 {
     }
 
     const aiIgnore = await loadAiIgnorePatterns(this.repoRoot);
-    const files = await glob('**/*.{ts,tsx,js,jsx}', {
+    const files = await glob('**/*.{ts,tsx,js,jsx,java}', {
       cwd: this.repoRoot,
       ignore: ['node_modules/**', '.git/**', '.git-ai/**', 'dist/**', ...aiIgnore],
     });

@@ -46,19 +46,20 @@
     "simple-git": "^3.30.0",
     "tar": "^7.5.3",
     "tree-sitter": "^0.21.1",
+    "tree-sitter-java": "^0.21.0",
     "tree-sitter-typescript": "^0.23.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "zod": "^4.3.5"
   },
   "optionalDependencies": {
-    "@lancedb/lancedb-darwin-x64": "0.22.3",
     "@lancedb/lancedb-darwin-arm64": "0.22.3",
-    "@lancedb/lancedb-linux-x64-gnu": "0.22.3",
+    "@lancedb/lancedb-darwin-x64": "0.22.3",
     "@lancedb/lancedb-linux-arm64-gnu": "0.22.3",
-    "@lancedb/lancedb-linux-x64-musl": "0.22.3",
     "@lancedb/lancedb-linux-arm64-musl": "0.22.3",
-    "@lancedb/lancedb-win32-x64-msvc": "0.22.3",
-    "@lancedb/lancedb-win32-arm64-msvc": "0.22.3"
+    "@lancedb/lancedb-linux-x64-gnu": "0.22.3",
+    "@lancedb/lancedb-linux-x64-musl": "0.22.3",
+    "@lancedb/lancedb-win32-arm64-msvc": "0.22.3",
+    "@lancedb/lancedb-win32-x64-msvc": "0.22.3"
   }
 }
