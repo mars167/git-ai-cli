@@ -10,6 +10,7 @@ import { defaultDbDir, openTables } from '../core/lancedb';
 import { ensureLfsTracking } from '../core/lfs';
 import { IndexerV2 } from '../core/indexer';
 import { buildQueryVector, scoreAgainst } from '../core/search';
+import { getIndexStatus } from '../core/status';
 import { queryManifestWorkspace } from '../core/workspace';
 
 export class GitAIV2MCPServer {
@@ -55,6 +56,16 @@ export class GitAIV2MCPServer {
             name: 'get_repo',
             description: 'Get current default repository root for this MCP server',
             inputSchema: { type: 'object', properties: {} },
+          },
+          {
+            name: 'get_index_status',
+            description: 'Get index readiness status for the repository',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository path (optional)' },
+              },
+            },
           },
           {
             name: 'search_symbols',
@@ -169,6 +180,14 @@ export class GitAIV2MCPServer {
         };
       }
 
+      if (name === 'get_index_status') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const status = await getIndexStatus(repoRoot);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(status, null, 2) }],
+        };
+      }
+
       if (name === 'set_repo') {
         const p = String((args as any).path ?? '');
         this.startDir = path.resolve(p);
@@ -246,6 +265,16 @@ export class GitAIV2MCPServer {
         return {
           content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, rows: res.rows }, null, 2) }],
         };
+      }
+
+      if ((name === 'search_symbols' || name === 'semantic_search') && !inferWorkspaceRoot(repoRootForDispatch)) {
+        const status = await getIndexStatus(repoRootForDispatch);
+        if (!status.ok) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ ok: false, error: 'Index not ready', status }, null, 2) }],
+            isError: true,
+          };
+        }
       }
 
       const { refs, chunks, repoRoot, dim } = await this.open(callPath);

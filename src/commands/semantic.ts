@@ -3,6 +3,7 @@ import path from 'path';
 import { resolveGitRoot } from '../core/git';
 import { defaultDbDir, openTables } from '../core/lancedb';
 import { buildQueryVector, scoreAgainst } from '../core/search';
+import { getIndexStatus } from '../core/status';
 
 export const semanticCommand = new Command('semantic')
   .description('Semantic search using SQ8 vectors (brute-force over chunks)')
@@ -11,6 +12,11 @@ export const semanticCommand = new Command('semantic')
   .option('-k, --topk <k>', 'Top K results', '10')
   .action(async (text, options) => {
     const repoRoot = await resolveGitRoot(path.resolve(options.path));
+    const status = await getIndexStatus(repoRoot);
+    if (!status.ok) {
+      console.log(JSON.stringify({ ok: false, error: 'Index not ready', status }, null, 2));
+      process.exit(1);
+    }
     const dbDir = defaultDbDir(repoRoot);
     const { chunks, refs } = await openTables({ dbDir, dim: 256, mode: 'create_if_missing' });
 

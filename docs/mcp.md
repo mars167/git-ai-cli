@@ -19,6 +19,7 @@ git-ai ai serve
 - `set_repo({ path })`：设置默认仓库路径，避免依赖进程工作目录
 
 ### 索引管理
+- `get_index_status({ path? })`：检查索引是否就绪，给出可执行的修复建议
 - `index_repo({ path?, dim?, overwrite? })`：构建/更新索引
 - `pack_index({ path?, lfs? })`：打包索引为 `.git-ai/lancedb.tar.gz`（可选启用 git-lfs track）
 - `unpack_index({ path? })`：解包索引归档

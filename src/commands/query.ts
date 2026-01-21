@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import path from 'path';
 import { inferWorkspaceRoot, resolveGitRoot } from '../core/git';
 import { defaultDbDir, openTables } from '../core/lancedb';
+import { getIndexStatus } from '../core/status';
 import { queryManifestWorkspace } from '../core/workspace';
 
 export const queryCommand = new Command('query')
@@ -17,6 +18,12 @@ export const queryCommand = new Command('query')
       const res = await queryManifestWorkspace({ manifestRepoRoot: repoRoot, keyword: q, limit });
       console.log(JSON.stringify(res, null, 2));
       return;
+    }
+
+    const status = await getIndexStatus(repoRoot);
+    if (!status.ok) {
+      console.log(JSON.stringify({ ok: false, error: 'Index not ready', status }, null, 2));
+      process.exit(1);
     }
 
     const dbDir = defaultDbDir(repoRoot);

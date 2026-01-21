@@ -6,9 +6,11 @@ import { serveCommand } from './serve';
 import { packCommand } from './pack';
 import { unpackCommand } from './unpack';
 import { hooksCommand } from './hooks';
+import { statusCommand } from './status';
 
 export const aiCommand = new Command('ai')
   .description('AI features (indexing, search, hooks, MCP)')
+  .addCommand(statusCommand)
   .addCommand(indexCommand)
   .addCommand(queryCommand)
   .addCommand(semanticCommand)
@@ -16,4 +18,3 @@ export const aiCommand = new Command('ai')
   .addCommand(unpackCommand)
   .addCommand(hooksCommand)
   .addCommand(serveCommand);
-

@@ -14,6 +14,7 @@ git-ai push -u origin main
 
 ```bash
 git-ai ai index --overwrite
+git-ai ai status
 git-ai ai query "search text" --limit 20
 git-ai ai semantic "semantic query" --topk 10
 git-ai ai pack
@@ -21,4 +22,3 @@ git-ai ai unpack
 git-ai ai hooks install
 git-ai ai serve
 ```
-

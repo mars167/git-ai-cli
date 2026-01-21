@@ -76,7 +76,33 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
 
   for (const repo of [springRepo, springMultiRepo, vueRepo]) {
     runOk('node', [CLI, 'status'], repo);
+
+    {
+      const res = runOk('node', [CLI, 'ai', 'status'], repo);
+      const obj = JSON.parse(res.stdout);
+      assert.equal(obj.ok, false);
+      assert.equal(obj.isGitRepo, true);
+      assert.equal(obj.meta.exists, false);
+    }
+
+    {
+      const res = run('node', [CLI, 'ai', 'query', 'HelloController', '--limit', '1'], repo);
+      assert.notEqual(res.status, 0);
+      const obj = JSON.parse(res.stdout);
+      assert.equal(obj.ok, false);
+      assert.equal(obj.error, 'Index not ready');
+    }
+
     runOk('node', [CLI, 'ai', 'index', '--overwrite'], repo);
+
+    {
+      const res = runOk('node', [CLI, 'ai', 'status'], repo);
+      const obj = JSON.parse(res.stdout);
+      assert.equal(obj.ok, true);
+      assert.ok(obj.lancedb.tables.includes('chunks'));
+      assert.ok(obj.lancedb.tables.includes('refs'));
+    }
+
     runOk('node', [CLI, 'ai', 'pack'], repo);
     runOk('git', ['add', '.git-ai/meta.json', '.git-ai/lancedb.tar.gz'], repo);
     runOk('git', ['commit', '-m', 'add git-ai index'], repo);
@@ -88,6 +114,15 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     assert.ok(stat.size > 0);
 
     await fs.rm(path.join(repo, '.git-ai', 'lancedb'), { recursive: true, force: true });
+
+    {
+      const res = runOk('node', [CLI, 'ai', 'status'], repo);
+      const obj = JSON.parse(res.stdout);
+      assert.equal(obj.ok, false);
+      assert.equal(obj.lancedb.exists, false);
+      assert.equal(obj.archive.exists, true);
+    }
+
     runOk('node', [CLI, 'ai', 'unpack'], repo);
     const stat2 = await fs.stat(path.join(repo, '.git-ai', 'lancedb'));
     assert.ok(stat2.isDirectory());
