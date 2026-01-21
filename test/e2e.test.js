@@ -126,7 +126,7 @@ test('git-ai can index repo-tool manifests workspace repos', async () => {
   await fs.mkdir(workspace, { recursive: true });
 
   const manifestRepo = await createRepo(workspace, path.join('.repo', 'manifests'), {
-    'default.xml': '<manifest></manifest>\n',
+    'default.xml': '<manifest><project name="project-a" path="project-a"/><project name="project-b" path="project-b"/></manifest>\n',
   });
 
   const projectA = await createRepo(workspace, 'project-a', {
@@ -144,5 +144,5 @@ test('git-ai can index repo-tool manifests workspace repos', async () => {
   const res = runOk('node', [CLI, 'ai', 'query', 'BController', '--limit', '20'], manifestRepo);
   const obj = JSON.parse(res.stdout);
   assert.ok(obj.count > 0);
-  assert.ok(obj.rows.some(r => String(r.file || '').includes('project-b/src/main/java/')));
+  assert.ok(obj.rows.some(r => String(r.project?.path || '') === 'project-b' && String(r.file || '').includes('src/main/java/')));
 });

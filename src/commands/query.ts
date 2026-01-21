@@ -1,7 +1,8 @@
 import { Command } from 'commander';
 import path from 'path';
-import { resolveGitRoot } from '../core/git';
+import { inferWorkspaceRoot, resolveGitRoot } from '../core/git';
 import { defaultDbDir, openTables } from '../core/lancedb';
+import { queryManifestWorkspace } from '../core/workspace';
 
 export const queryCommand = new Command('query')
   .description('Query refs table by symbol substring')
@@ -10,12 +11,16 @@ export const queryCommand = new Command('query')
   .option('--limit <n>', 'Limit results', '50')
   .action(async (keyword, options) => {
     const repoRoot = await resolveGitRoot(path.resolve(options.path));
-    const dbDir = defaultDbDir(repoRoot);
-    const { refs } = await openTables({ dbDir, dim: 256, mode: 'create_if_missing' });
-
     const limit = Number(options.limit);
     const q = String(keyword);
+    if (inferWorkspaceRoot(repoRoot)) {
+      const res = await queryManifestWorkspace({ manifestRepoRoot: repoRoot, keyword: q, limit });
+      console.log(JSON.stringify(res, null, 2));
+      return;
+    }
+
+    const dbDir = defaultDbDir(repoRoot);
+    const { refs } = await openTables({ dbDir, dim: 256, mode: 'create_if_missing' });
     const rows = await refs.query().where(`symbol LIKE '%${q.replace(/'/g, "''")}%'`).limit(limit).toArray();
     console.log(JSON.stringify({ repoRoot, count: (rows as any[]).length, rows }, null, 2));
   });
-

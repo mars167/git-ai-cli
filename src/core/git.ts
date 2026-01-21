@@ -13,6 +13,10 @@ export async function resolveGitRoot(startDir: string): Promise<string> {
 }
 
 export function inferScanRoot(repoRoot: string): string {
+  return path.resolve(repoRoot);
+}
+
+export function inferWorkspaceRoot(repoRoot: string): string | null {
   const resolved = path.resolve(repoRoot);
   const parts = resolved.split(path.sep).filter(Boolean);
   const repoIdx = parts.lastIndexOf('.repo');
@@ -24,5 +28,5 @@ export function inferScanRoot(repoRoot: string): string {
       return prefix;
     }
   }
-  return resolved;
+  return null;
 }

@@ -4,12 +4,13 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import fs from 'fs-extra';
 import path from 'path';
 import { glob } from 'glob';
-import { inferScanRoot, resolveGitRoot } from '../core/git';
+import { inferScanRoot, inferWorkspaceRoot, resolveGitRoot } from '../core/git';
 import { packLanceDb, unpackLanceDb } from '../core/archive';
 import { defaultDbDir, openTables } from '../core/lancedb';
 import { ensureLfsTracking } from '../core/lfs';
 import { IndexerV2 } from '../core/indexer';
 import { buildQueryVector, scoreAgainst } from '../core/search';
+import { queryManifestWorkspace } from '../core/workspace';
 
 export class GitAIV2MCPServer {
   private server: Server;
@@ -234,6 +235,16 @@ export class GitAIV2MCPServer {
         const numbered = slice.map((l, idx) => `${String(startLine + idx).padStart(6, ' ')}→${l}`).join('\n');
         return {
           content: [{ type: 'text', text: JSON.stringify({ ok: true, repoRoot, scanRoot, file, start_line: startLine, end_line: endLine, text: numbered }, null, 2) }],
+        };
+      }
+
+      const repoRootForDispatch = await this.resolveRepoRoot(callPath);
+      if (name === 'search_symbols' && inferWorkspaceRoot(repoRootForDispatch)) {
+        const query = String((args as any).query ?? '');
+        const limit = Number((args as any).limit ?? 50);
+        const res = await queryManifestWorkspace({ manifestRepoRoot: repoRootForDispatch, keyword: query, limit });
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, rows: res.rows }, null, 2) }],
         };
       }
 
