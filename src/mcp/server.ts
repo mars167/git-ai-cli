@@ -4,7 +4,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import fs from 'fs-extra';
 import path from 'path';
 import { glob } from 'glob';
-import { resolveGitRoot } from '../core/git';
+import { inferScanRoot, resolveGitRoot } from '../core/git';
 import { packLanceDb, unpackLanceDb } from '../core/archive';
 import { defaultDbDir, openTables } from '../core/lancedb';
 import { ensureLfsTracking } from '../core/lfs';
@@ -30,17 +30,18 @@ export class GitAIV2MCPServer {
     const metaPath = path.join(repoRoot, '.git-ai', 'meta.json');
     const meta = await fs.pathExists(metaPath) ? await fs.readJSON(metaPath).catch(() => null) : null;
     const dim = typeof meta?.dim === 'number' ? meta.dim : 256;
+    const scanRoot = path.resolve(repoRoot, typeof meta?.scanRoot === 'string' ? meta.scanRoot : path.relative(repoRoot, inferScanRoot(repoRoot)));
     const tables = await openTables({ dbDir, dim, mode: 'create_if_missing' });
-    return { repoRoot, dim, ...tables };
+    return { repoRoot, scanRoot, dim, ...tables };
   }
 
   private async resolveRepoRoot(callPath?: string) {
     return resolveGitRoot(path.resolve(callPath ?? this.startDir));
   }
 
-  private assertPathInsideRepo(repoRoot: string, file: string) {
-    const abs = path.resolve(repoRoot, file);
-    const root = path.resolve(repoRoot) + path.sep;
+  private assertPathInsideRoot(rootDir: string, file: string) {
+    const abs = path.resolve(rootDir, file);
+    const root = path.resolve(rootDir) + path.sep;
     if (!abs.startsWith(root)) throw new Error('Path escapes repository root');
     return abs;
   }
@@ -161,8 +162,9 @@ export class GitAIV2MCPServer {
 
       if (name === 'get_repo') {
         const repoRoot = await this.resolveRepoRoot(callPath);
+        const scanRoot = (await this.open(callPath)).scanRoot;
         return {
-          content: [{ type: 'text', text: JSON.stringify({ ok: true, startDir: this.startDir, repoRoot }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ ok: true, startDir: this.startDir, repoRoot, scanRoot }, null, 2) }],
         };
       }
 
@@ -170,19 +172,21 @@ export class GitAIV2MCPServer {
         const p = String((args as any).path ?? '');
         this.startDir = path.resolve(p);
         const repoRoot = await resolveGitRoot(this.startDir);
+        const scanRoot = (await this.open(this.startDir)).scanRoot;
         return {
-          content: [{ type: 'text', text: JSON.stringify({ ok: true, startDir: this.startDir, repoRoot }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ ok: true, startDir: this.startDir, repoRoot, scanRoot }, null, 2) }],
         };
       }
 
       if (name === 'index_repo') {
         const repoRoot = await this.resolveRepoRoot(callPath);
+        const scanRoot = inferScanRoot(repoRoot);
         const dim = Number((args as any).dim ?? 256);
         const overwrite = Boolean((args as any).overwrite ?? false);
-        const indexer = new IndexerV2({ repoRoot, dim, overwrite });
+        const indexer = new IndexerV2({ repoRoot, scanRoot, dim, overwrite });
         await indexer.run();
         return {
-          content: [{ type: 'text', text: JSON.stringify({ ok: true, repoRoot, dim, overwrite }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ ok: true, repoRoot, scanRoot, dim, overwrite }, null, 2) }],
         };
       }
 
@@ -204,32 +208,32 @@ export class GitAIV2MCPServer {
       }
 
       if (name === 'list_files') {
-        const repoRoot = await this.resolveRepoRoot(callPath);
+        const { repoRoot, scanRoot } = await this.open(callPath);
         const pattern = String((args as any).pattern ?? '**/*');
         const limit = Number((args as any).limit ?? 500);
         const files = await glob(pattern, {
-          cwd: repoRoot,
+          cwd: scanRoot,
           dot: true,
           nodir: true,
-          ignore: ['node_modules/**', '.git/**', '.git-ai/**', 'dist/**'],
+          ignore: ['node_modules/**', '.git/**', '**/.git/**', '.git-ai/**', '**/.git-ai/**', '.repo/**', '**/.repo/**', 'dist/**', 'target/**', '**/target/**', 'build/**', '**/build/**', '.gradle/**', '**/.gradle/**'],
         });
         return {
-          content: [{ type: 'text', text: JSON.stringify({ ok: true, repoRoot, files: files.slice(0, limit) }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ ok: true, repoRoot, scanRoot, files: files.slice(0, limit) }, null, 2) }],
         };
       }
 
       if (name === 'read_file') {
-        const repoRoot = await this.resolveRepoRoot(callPath);
+        const { repoRoot, scanRoot } = await this.open(callPath);
         const file = String((args as any).file ?? '');
         const startLine = Math.max(1, Number((args as any).start_line ?? 1));
         const endLine = Math.max(startLine, Number((args as any).end_line ?? startLine + 199));
-        const abs = this.assertPathInsideRepo(repoRoot, file);
+        const abs = this.assertPathInsideRoot(scanRoot, file);
         const raw = await fs.readFile(abs, 'utf-8');
         const lines = raw.split(/\r?\n/);
         const slice = lines.slice(startLine - 1, endLine);
         const numbered = slice.map((l, idx) => `${String(startLine + idx).padStart(6, ' ')}→${l}`).join('\n');
         return {
-          content: [{ type: 'text', text: JSON.stringify({ ok: true, repoRoot, file, start_line: startLine, end_line: endLine, text: numbered }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ ok: true, repoRoot, scanRoot, file, start_line: startLine, end_line: endLine, text: numbered }, null, 2) }],
         };
       }
 

@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import path from 'path';
-import { resolveGitRoot } from '../core/git';
+import { inferScanRoot, resolveGitRoot } from '../core/git';
 import { IndexerV2 } from '../core/indexer';
 
 export const indexCommand = new Command('index')
@@ -11,11 +11,12 @@ export const indexCommand = new Command('index')
   .action(async (options) => {
     try {
       const repoRoot = await resolveGitRoot(path.resolve(options.path));
+      const scanRoot = inferScanRoot(repoRoot);
       const dim = Number(options.dim);
       const overwrite = Boolean(options.overwrite);
-      const indexer = new IndexerV2({ repoRoot, dim, overwrite });
+      const indexer = new IndexerV2({ repoRoot, scanRoot, dim, overwrite });
       await indexer.run();
-      console.log(JSON.stringify({ ok: true, repoRoot, dim, overwrite }, null, 2));
+      console.log(JSON.stringify({ ok: true, repoRoot, scanRoot, dim, overwrite }, null, 2));
     } catch (e) {
       console.error('Indexing failed:', e);
       process.exit(1);

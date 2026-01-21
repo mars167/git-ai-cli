@@ -119,3 +119,30 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     runOk('node', [CLI, 'push', '-u', 'origin', 'main'], repo);
   }
 });
+
+test('git-ai can index repo-tool manifests workspace repos', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'git-ai-e2e-'));
+  const workspace = path.join(tmp, 'ws');
+  await fs.mkdir(workspace, { recursive: true });
+
+  const manifestRepo = await createRepo(workspace, path.join('.repo', 'manifests'), {
+    'default.xml': '<manifest></manifest>\n',
+  });
+
+  const projectA = await createRepo(workspace, 'project-a', {
+    'src/main/java/com/example/a/AService.java': 'package com.example.a;\npublic class AService { public String hello() { return "a"; } }\n',
+  });
+  const projectB = await createRepo(workspace, 'project-b', {
+    'src/main/java/com/example/b/BController.java': 'package com.example.b;\npublic class BController { public String ping() { return "b"; } }\n',
+  });
+
+  for (const repo of [projectA, projectB]) {
+    runOk('node', [CLI, 'status'], repo);
+  }
+
+  runOk('node', [CLI, 'ai', 'index', '--overwrite'], manifestRepo);
+  const res = runOk('node', [CLI, 'ai', 'query', 'BController', '--limit', '20'], manifestRepo);
+  const obj = JSON.parse(res.stdout);
+  assert.ok(obj.count > 0);
+  assert.ok(obj.rows.some(r => String(r.file || '').includes('project-b/src/main/java/')));
+});

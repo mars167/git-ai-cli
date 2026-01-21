@@ -10,6 +10,7 @@ import { ChunkRow, RefRow } from './types';
 
 export interface IndexOptions {
   repoRoot: string;
+  scanRoot?: string;
   dim: number;
   overwrite: boolean;
 }
@@ -31,12 +32,14 @@ function buildChunkText(file: string, symbol: { name: string; kind: string; sign
 
 export class IndexerV2 {
   private repoRoot: string;
+  private scanRoot: string;
   private parser: CodeParser;
   private dim: number;
   private overwrite: boolean;
 
   constructor(options: IndexOptions) {
     this.repoRoot = path.resolve(options.repoRoot);
+    this.scanRoot = path.resolve(options.scanRoot ?? options.repoRoot);
     this.dim = options.dim;
     this.overwrite = options.overwrite;
     this.parser = new CodeParser();
@@ -64,11 +67,15 @@ export class IndexerV2 {
 
     const aiIgnore = await loadAiIgnorePatterns(this.repoRoot);
     const files = await glob('**/*.{ts,tsx,js,jsx,java}', {
-      cwd: this.repoRoot,
+      cwd: this.scanRoot,
       ignore: [
         'node_modules/**',
         '.git/**',
+        '**/.git/**',
         '.git-ai/**',
+        '**/.git-ai/**',
+        '.repo/**',
+        '**/.repo/**',
         'dist/**',
         'target/**',
         '**/target/**',
@@ -84,7 +91,7 @@ export class IndexerV2 {
     const refRows: any[] = [];
 
     for (const file of files) {
-      const fullPath = path.join(this.repoRoot, file);
+      const fullPath = path.join(this.scanRoot, file);
       const symbols = await this.parser.parseFile(fullPath);
       for (const s of symbols) {
         const text = buildChunkText(file, s);
@@ -129,6 +136,7 @@ export class IndexerV2 {
       chunksAdded: chunkRows.length,
       refsAdded: refRows.length,
       dbDir: path.relative(this.repoRoot, dbDir),
+      scanRoot: path.relative(this.repoRoot, this.scanRoot),
     };
     await fs.writeJSON(path.join(gitAiDir, 'meta.json'), meta, { spaces: 2 });
   }
