@@ -42,6 +42,8 @@ git-ai ai serve
 
 ## AST 图搜索（CozoDB）
 
+> **实战指南**：觉得命令太抽象？请查看 [AST 图谱实战指南](./graph_scenarios.md) 了解如何查找定义、父类、子类等常见场景。
+
 `git-ai ai index` 会在 `.git-ai/` 下额外维护一份 AST 关系图数据库（默认文件名：`.git-ai/ast-graph.sqlite`）。
 
 图搜索相关命令：

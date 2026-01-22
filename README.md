@@ -26,6 +26,7 @@ yarn global add git-ai
 - 开发指引：[DEVELOPMENT.md](./DEVELOPMENT.md)
 - 文档中心（使用/概念/排障）：[docs/README.md](./docs/README.md)
 - 设计说明：[docs/design.md](./docs/design.md)
+- 技术原理详解（小白向）：[docs/architecture_explained.md](./docs/architecture_explained.md)
 - Agent 集成（Skills/Rules）：[docs/mcp.md](./docs/mcp.md)
 
 ## 基本用法（与 git 类似）
