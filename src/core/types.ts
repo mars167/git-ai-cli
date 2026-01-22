@@ -4,6 +4,15 @@ export interface SymbolInfo {
   startLine: number;
   endLine: number;
   signature: string;
+  container?: {
+    name: string;
+    kind: 'function' | 'class' | 'method';
+    startLine: number;
+    endLine: number;
+    signature: string;
+  };
+  extends?: string[];
+  implements?: string[];
 }
 
 export interface RefRow {

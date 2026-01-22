@@ -24,12 +24,24 @@ git-ai ai serve
 - `unpack_index({ path? })`：解包索引归档
 
 ### 检索
-- `search_symbols({ query, limit?, path? })`：按子串搜索符号并返回文件位置
+- `search_symbols({ query, mode?, case_insensitive?, max_candidates?, limit?, path? })`：符号检索（默认 substring；支持 prefix/wildcard/regex/fuzzy）
 - `semantic_search({ query, topk?, path? })`：基于 LanceDB + SQ8 的语义检索
+- `ast_graph_query({ query, params?, path? })`：对 AST 图数据库执行 CozoScript 查询
 
 ### 文件读取
 - `list_files({ path?, pattern?, limit? })`：按 glob 列文件（默认忽略 node_modules, .git 等）
 - `read_file({ path?, file, start_line?, end_line? })`：按行读取文件片段
+
+## AST 图查询示例
+
+列出指定文件里的顶层符号（先把 file path 转为 file_id）：
+
+```cozo
+?[file_id] <- [[$file_id]]
+?[child_id, name, kind, start_line, end_line] :=
+  *ast_contains{parent_id: file_id, child_id},
+  *ast_symbol{ref_id: child_id, file, name, kind, signature, start_line, end_line}
+```
 
 ## 推荐调用方式（让 Agent 自动传对路径）
 - 第一次调用先 `set_repo({path: "/ABS/PATH/TO/REPO"})`
@@ -64,6 +76,7 @@ git-ai ai serve
 **1) 符号定位（最稳）**
 当用户提到函数/类/文件名/模块名：
 - `search_symbols({ query: "FooBar", limit: 50 })`
+- `search_symbols({ query: "get*repo", mode: "wildcard", case_insensitive: true, limit: 20 })`
 
 输出 rows 后，选最可能的 1-3 个命中点继续读代码：
 - `read_file({ file: "src/xxx.ts", start_line: 1, end_line: 220 })`

@@ -33,6 +33,8 @@ description: "通过 git-ai 的 MCP 工具检视/检索代码仓。用户要“�
 ### 1) 符号定位（最稳）
 当用户提到函数/类/文件名/模块名：
 - `search_symbols({ query: "FooBar", limit: 50 })`
+- `search_symbols({ query: "get*repo", mode: "wildcard", case_insensitive: true, limit: 20 })`
+- `search_symbols({ query: "^get.*repo$", mode: "regex", case_insensitive: true, limit: 20 })`
 
 输出 rows 后，选最可能的 1-3 个命中点继续读代码：
 - `read_file({ file: "src/xxx.ts", start_line: 1, end_line: 220 })`
@@ -49,6 +51,10 @@ description: "通过 git-ai 的 MCP 工具检视/检索代码仓。用户要“�
 - `list_files({ pattern: "src/**/*.{ts,tsx,js,jsx}", limit: 500 })`
 - `list_files({ pattern: "**/*mcp*", limit: 200 })`
 
+### 4) AST 图查询（递归/关系类问题）
+当你需要回答“包含关系/继承关系/子节点列表/递归查询”等问题：
+- `ast_graph_query({ query: "<CozoScript>", params: {...} })`
+
 ## 输出要求（给用户的答复）
 - 先给结论，再给证据（文件 + 行范围）
 - 引用代码位置用 IDE 可点链接（file://...#Lx-Ly）
@@ -58,4 +64,3 @@ description: "通过 git-ai 的 MCP 工具检视/检索代码仓。用户要“�
 - MCP 的 `semantic_search` 依赖 `.git-ai/lancedb`：没索引就没结果
 - 修改索引后建议 `pack_index`，并把 `.git-ai/lancedb.tar.gz` 提交（如果团队要共享）
 - `read_file` 只能读仓库内相对路径，不允许 `../` 越界
-

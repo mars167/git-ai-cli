@@ -11,6 +11,8 @@ import { ensureLfsTracking } from '../core/lfs';
 import { IndexerV2 } from '../core/indexer';
 import { buildQueryVector, scoreAgainst } from '../core/search';
 import { queryManifestWorkspace } from '../core/workspace';
+import { runAstGraphQuery } from '../core/astGraphQuery';
+import { buildCoarseWhere, filterAndRankSymbolRows, inferSymbolSearchMode, pickCoarseToken } from '../core/symbolSearch';
 
 export class GitAIV2MCPServer {
   private server: Server;
@@ -58,11 +60,14 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'search_symbols',
-            description: 'Search symbols by substring and return file locations',
+            description: 'Search symbols and return file locations (substring/prefix/wildcard/regex/fuzzy)',
             inputSchema: {
               type: 'object',
               properties: {
                 query: { type: 'string' },
+                mode: { type: 'string', enum: ['substring', 'prefix', 'wildcard', 'regex', 'fuzzy'] },
+                case_insensitive: { type: 'boolean', default: false },
+                max_candidates: { type: 'number', default: 1000 },
                 path: { type: 'string', description: 'Repository path (optional)' },
                 limit: { type: 'number', default: 50 },
               },
@@ -152,6 +157,19 @@ export class GitAIV2MCPServer {
               required: ['path'],
             },
           },
+          {
+            name: 'ast_graph_query',
+            description: 'Run a CozoScript query against the AST graph database',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: { type: 'string' },
+                params: { type: 'object', default: {} },
+                path: { type: 'string', description: 'Repository path (optional)' },
+              },
+              required: ['query'],
+            },
+          },
         ],
       };
     });
@@ -238,13 +256,28 @@ export class GitAIV2MCPServer {
         };
       }
 
+      if (name === 'ast_graph_query') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const query = String((args as any).query ?? '');
+        const params = (args as any).params && typeof (args as any).params === 'object' ? (args as any).params : {};
+        const result = await runAstGraphQuery(repoRoot, query, params);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot, result }, null, 2) }],
+        };
+      }
+
       const repoRootForDispatch = await this.resolveRepoRoot(callPath);
       if (name === 'search_symbols' && inferWorkspaceRoot(repoRootForDispatch)) {
         const query = String((args as any).query ?? '');
         const limit = Number((args as any).limit ?? 50);
-        const res = await queryManifestWorkspace({ manifestRepoRoot: repoRootForDispatch, keyword: query, limit });
+        const mode = inferSymbolSearchMode(query, (args as any).mode);
+        const caseInsensitive = Boolean((args as any).case_insensitive ?? false);
+        const maxCandidates = Math.max(limit, Number((args as any).max_candidates ?? Math.min(2000, limit * 20)));
+        const keyword = (mode === 'substring' || mode === 'prefix') ? query : pickCoarseToken(query);
+        const res = await queryManifestWorkspace({ manifestRepoRoot: repoRootForDispatch, keyword, limit: maxCandidates });
+        const rows = filterAndRankSymbolRows(res.rows, { query, mode, caseInsensitive, limit });
         return {
-          content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, rows: res.rows }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, rows }, null, 2) }],
         };
       }
 
@@ -253,8 +286,14 @@ export class GitAIV2MCPServer {
       if (name === 'search_symbols') {
         const query = String((args as any).query ?? '');
         const limit = Number((args as any).limit ?? 50);
-        const safe = query.replace(/'/g, "''");
-        const rows = await refs.query().where(`symbol LIKE '%${safe}%'`).limit(limit).toArray();
+        const mode = inferSymbolSearchMode(query, (args as any).mode);
+        const caseInsensitive = Boolean((args as any).case_insensitive ?? false);
+        const maxCandidates = Math.max(limit, Number((args as any).max_candidates ?? Math.min(2000, limit * 20)));
+        const where = buildCoarseWhere({ query, mode, caseInsensitive });
+        const candidates = where
+          ? await refs.query().where(where).limit(maxCandidates).toArray()
+          : await refs.query().limit(maxCandidates).toArray();
+        const rows = filterAndRankSymbolRows(candidates as any[], { query, mode, caseInsensitive, limit });
         return {
           content: [{ type: 'text', text: JSON.stringify({ repoRoot, rows }, null, 2) }],
         };

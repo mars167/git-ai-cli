@@ -91,7 +91,7 @@ export async function queryManifestWorkspace(params: {
 
     const dbDir = defaultDbDir(ensured.repoDir);
     const { refs } = await openTables({ dbDir, dim: 256, mode: 'create_if_missing' });
-    const projectRows = await refs.query().where(`symbol LIKE '%${q}%'`).limit(params.limit).toArray();
+    const projectRows = await refs.query().where(`symbol ILIKE '%${q}%'`).limit(params.limit).toArray();
     for (const r of projectRows as any[]) {
       rows.push({
         project: { name: project.name, path: project.path, repoRoot: ensured.repoDir, from: ensured.from },
