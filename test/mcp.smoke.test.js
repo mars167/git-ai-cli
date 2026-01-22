@@ -30,6 +30,21 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     assert.ok(toolNames.has('unpack_index'));
     assert.ok(toolNames.has('list_files'));
     assert.ok(toolNames.has('read_file'));
+    assert.ok(toolNames.has('ast_graph_query'));
+
+    const call = await client.callTool({
+      name: 'search_symbols',
+      arguments: {
+        query: 'get*repo',
+        mode: 'wildcard',
+        case_insensitive: true,
+        limit: 5,
+        max_candidates: 50,
+      },
+    });
+    const text = String(call?.content?.[0]?.text ?? '');
+    const parsed = text ? JSON.parse(text) : null;
+    assert.ok(parsed && Array.isArray(parsed.rows));
   } finally {
     await transport.close();
   }

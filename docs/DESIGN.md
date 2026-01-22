@@ -11,6 +11,8 @@
 - `.git-ai/`：索引目录
   - `lancedb/`：LanceDB 数据目录
   - `lancedb.tar.gz`：打包后的 LanceDB（用于 Git LFS 追踪与传输）
+  - `ast-graph.sqlite`：AST 关系图数据库（CozoDB，优先 SQLite 引擎）
+  - `ast-graph.export.json`：AST 图导出快照（仅在非 SQLite 后端时用于跨进程复用）
   - `meta.json`：索引元信息（维度、编码、构建时间等）
 
 ## 3. 数据模型（两张表）
@@ -54,6 +56,21 @@
   - 计算 query embedding → SQ8；
   - 扫描 chunks（或按过滤条件缩小）反量化计算 cosine 相似度；
   - 取 TopK 后关联 refs 输出定位结果。
+
+## 6.1 AST 图查询（CozoDB）
+
+索引时会把符号及其关系写入 CozoDB，用于表达“包含关系”和“继承关系”等更适合图/递归查询的数据：
+
+### 关系（relations）
+- `ast_file(file_id => file)`：文件节点（file_id 为 `sha256("file:" + file)`）
+- `ast_symbol(ref_id => file, name, kind, signature, start_line, end_line)`：符号节点（ref_id 与 refs 表一致）
+- `ast_contains(parent_id, child_id)`：包含关系边（parent_id 可能是 file_id 或 ref_id）
+- `ast_extends_name(sub_id, super_name)`：继承关系（按名字记录，便于后续 join/解析）
+- `ast_implements_name(sub_id, iface_name)`：实现关系（按名字记录）
+
+### CLI / MCP
+- CLI：`git-ai ai graph ...`
+- MCP：`ast_graph_query({query, params})`
 
 ## 7. Git hooks 集成
 - `pre-commit`：自动重建索引（index --overwrite）并打包（pack），把 `.git-ai/lancedb.tar.gz` 添加到暂存区；若安装了 git-lfs 会自动执行 lfs track。

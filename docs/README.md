@@ -13,9 +13,11 @@
 - 让 Agent 通过 MCP tools 低成本命中符号/片段，再按需读取文件
 
 ### 重要目录
-- `.git-ai/meta.json`：索引元数据
+- `.git-ai/meta.json`：索引元数据（本地生成，通常不提交）
 - `.git-ai/lancedb/`：本地向量索引目录（通常不提交）
 - `.git-ai/lancedb.tar.gz`：归档后的索引（可提交/可用 git-lfs 追踪）
+- `.git-ai/ast-graph.sqlite`：AST 图数据库（CozoDB）
+- `.git-ai/ast-graph.export.json`：AST 图导出快照（用于非 SQLite 后端跨进程复用）
 
 ## 目录
 

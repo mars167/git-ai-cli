@@ -26,6 +26,7 @@ yarn global add git-ai
 - 开发指引：[DEVELOPMENT.md](./DEVELOPMENT.md)
 - 文档中心（使用/概念/排障）：[docs/README.md](./docs/README.md)
 - 设计说明：[docs/design.md](./docs/design.md)
+- 技术原理详解（小白向）：[docs/architecture_explained.md](./docs/architecture_explained.md)
 - Agent 集成（Skills/Rules）：[docs/mcp.md](./docs/mcp.md)
 
 ## 基本用法（与 git 类似）
@@ -48,6 +49,7 @@ git-ai push -u origin main
 git-ai ai index --overwrite
 git-ai ai query Indexer --limit 10
 git-ai ai semantic "semantic search" --topk 5
+git-ai ai graph find GitAIV2MCPServer
 git-ai ai pack
 git-ai ai unpack
 git-ai ai serve
@@ -56,8 +58,9 @@ git-ai ai serve
 ## MCP Server（stdio）
 
 `git-ai` 提供一个基于 MCP 的 stdio Server，供 Agent/客户端以工具方式调用：
-- `search_symbols`：按子串搜索符号并返回文件位置
+- `search_symbols`：符号检索（substring/prefix/wildcard/regex/fuzzy）
 - `semantic_search`：基于 LanceDB + SQ8 的语义检索
+- `ast_graph_query`：基于 CozoDB 的 AST 图查询（CozoScript）
 
 ### 启动
 

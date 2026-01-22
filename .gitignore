@@ -3,5 +3,9 @@ dist/
 .DS_Store
 
 .git-ai/lancedb/
+.git-ai/meta.json
+.git-ai/cozo.error.json
+.git-ai/ast-graph.sqlite
+.git-ai/ast-graph.export.json
 .git-ai/._*
 .tmp-hook-test/

@@ -6,14 +6,15 @@ import { serveCommand } from './serve';
 import { packCommand } from './pack';
 import { unpackCommand } from './unpack';
 import { hooksCommand } from './hooks';
+import { graphCommand } from './graph';
 
 export const aiCommand = new Command('ai')
   .description('AI features (indexing, search, hooks, MCP)')
   .addCommand(indexCommand)
   .addCommand(queryCommand)
   .addCommand(semanticCommand)
+  .addCommand(graphCommand)
   .addCommand(packCommand)
   .addCommand(unpackCommand)
   .addCommand(hooksCommand)
   .addCommand(serveCommand);
-

@@ -6,6 +6,7 @@ import { defaultDbDir, openTables } from './lancedb';
 import { sha256Hex } from './crypto';
 import { hashEmbedding } from './embedding';
 import { quantizeSQ8 } from './sq8';
+import { writeAstGraphToCozo } from './astGraph';
 import { ChunkRow, RefRow } from './types';
 
 export interface IndexOptions {
@@ -89,14 +90,39 @@ export class IndexerV2 {
 
     const chunkRows: any[] = [];
     const refRows: any[] = [];
+    const astFiles: Array<[string, string]> = [];
+    const astSymbols: Array<[string, string, string, string, string, number, number]> = [];
+    const astContains: Array<[string, string]> = [];
+    const astExtendsName: Array<[string, string]> = [];
+    const astImplementsName: Array<[string, string]> = [];
 
     for (const file of files) {
       const fullPath = path.join(this.scanRoot, file);
       const symbols = await this.parser.parseFile(fullPath);
+      const fileId = sha256Hex(`file:${file}`);
+      astFiles.push([fileId, file]);
       for (const s of symbols) {
         const text = buildChunkText(file, s);
         const contentHash = sha256Hex(text);
         const refId = sha256Hex(`${file}:${s.name}:${s.kind}:${s.startLine}:${s.endLine}:${contentHash}`);
+
+        astSymbols.push([refId, file, s.name, s.kind, s.signature, s.startLine, s.endLine]);
+        let parentId = fileId;
+        if (s.container) {
+          const cText = buildChunkText(file, s.container);
+          const cHash = sha256Hex(cText);
+          parentId = sha256Hex(`${file}:${s.container.name}:${s.container.kind}:${s.container.startLine}:${s.container.endLine}:${cHash}`);
+        }
+        astContains.push([parentId, refId]);
+
+        if (s.kind === 'class') {
+          if (s.extends) {
+            for (const superName of s.extends) astExtendsName.push([refId, superName]);
+          }
+          if (s.implements) {
+            for (const ifaceName of s.implements) astImplementsName.push([refId, ifaceName]);
+          }
+        }
 
         if (!existingChunkIds.has(contentHash)) {
           const vec = hashEmbedding(text, { dim: this.dim });
@@ -129,6 +155,14 @@ export class IndexerV2 {
     if (chunkRows.length > 0) await chunks.add(chunkRows);
     if (refRows.length > 0) await refs.add(refRows);
 
+    const astGraph = await writeAstGraphToCozo(this.repoRoot, {
+      files: astFiles,
+      symbols: astSymbols,
+      contains: astContains,
+      extends_name: astExtendsName,
+      implements_name: astImplementsName,
+    });
+
     const meta = {
       version: '2.0',
       dim: this.dim,
@@ -137,6 +171,18 @@ export class IndexerV2 {
       refsAdded: refRows.length,
       dbDir: path.relative(this.repoRoot, dbDir),
       scanRoot: path.relative(this.repoRoot, this.scanRoot),
+      astGraph: astGraph.enabled
+        ? {
+          backend: 'cozo',
+          engine: astGraph.engine,
+          dbPath: astGraph.dbPath ? path.relative(this.repoRoot, astGraph.dbPath) : undefined,
+          counts: astGraph.counts,
+        }
+        : {
+          backend: 'cozo',
+          enabled: false,
+          skippedReason: astGraph.skippedReason,
+        },
     };
     await fs.writeJSON(path.join(gitAiDir, 'meta.json'), meta, { spaces: 2 });
   }
