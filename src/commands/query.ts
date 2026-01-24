@@ -1,11 +1,13 @@
 import { Command } from 'commander';
 import path from 'path';
+import fs from 'fs-extra';
 import { inferWorkspaceRoot, resolveGitRoot } from '../core/git';
 import { defaultDbDir, openTablesByLang } from '../core/lancedb';
 import { queryManifestWorkspace } from '../core/workspace';
 import { buildCoarseWhere, filterAndRankSymbolRows, inferSymbolSearchMode, pickCoarseToken, SymbolSearchMode } from '../core/symbolSearch';
 import { createLogger } from '../core/log';
 import { checkIndex, resolveLangs } from '../core/indexCheck';
+import { generateRepoMap, type FileRank } from '../core/repoMap';
 
 export const queryCommand = new Command('query')
   .description('Query refs table by symbol match (substring/prefix/wildcard/regex/fuzzy)')
@@ -16,6 +18,10 @@ export const queryCommand = new Command('query')
   .option('--case-insensitive', 'Case-insensitive matching', false)
   .option('--max-candidates <n>', 'Max candidates to fetch before filtering', '1000')
   .option('--lang <lang>', 'Language: auto|all|java|ts', 'auto')
+  .option('--with-repo-map', 'Attach a lightweight repo map (ranked files + top symbols + wiki links)', false)
+  .option('--repo-map-files <n>', 'Max repo map files', '20')
+  .option('--repo-map-symbols <n>', 'Max repo map symbols per file', '5')
+  .option('--wiki <dir>', 'Wiki directory (default: docs/wiki or wiki)', '')
   .action(async (keyword, options) => {
     const log = createLogger({ component: 'cli', cmd: 'ai query' });
     const startedAt = Date.now();
@@ -27,6 +33,7 @@ export const queryCommand = new Command('query')
       const caseInsensitive = Boolean(options.caseInsensitive ?? false);
       const maxCandidates = Math.max(limit, Number(options.maxCandidates ?? Math.min(2000, limit * 20)));
       const langSel = String(options.lang ?? 'auto');
+      const withRepoMap = Boolean((options as any).withRepoMap ?? false);
 
       if (inferWorkspaceRoot(repoRoot)) {
         const coarse = (mode === 'substring' || mode === 'prefix') ? q : pickCoarseToken(q);
@@ -38,7 +45,8 @@ export const queryCommand = new Command('query')
             : res.rows;
         const rows = filterAndRankSymbolRows(filteredByLang, { query: q, mode, caseInsensitive, limit });
         log.info('query_symbols', { ok: true, repoRoot, workspace: true, mode, case_insensitive: caseInsensitive, limit, max_candidates: maxCandidates, candidates: res.rows.length, rows: rows.length, duration_ms: Date.now() - startedAt });
-        console.log(JSON.stringify({ ...res, rows }, null, 2));
+        const repoMap = withRepoMap ? { enabled: false, skippedReason: 'workspace_mode_not_supported' } : undefined;
+        console.log(JSON.stringify({ ...res, rows, ...(repoMap ? { repo_map: repoMap } : {}) }, null, 2));
         return;
       }
 
@@ -71,9 +79,35 @@ export const queryCommand = new Command('query')
       }
       const rows = filterAndRankSymbolRows(candidates as any[], { query: q, mode, caseInsensitive, limit });
       log.info('query_symbols', { ok: true, repoRoot, workspace: false, lang: langSel, langs, mode, case_insensitive: caseInsensitive, limit, max_candidates: maxCandidates, candidates: candidates.length, rows: rows.length, duration_ms: Date.now() - startedAt });
-      console.log(JSON.stringify({ repoRoot, count: rows.length, lang: langSel, rows }, null, 2));
+      const repoMap = withRepoMap ? await buildRepoMapAttachment(repoRoot, options) : undefined;
+      console.log(JSON.stringify({ repoRoot, count: rows.length, lang: langSel, rows, ...(repoMap ? { repo_map: repoMap } : {}) }, null, 2));
     } catch (e) {
       log.error('query_symbols', { ok: false, duration_ms: Date.now() - startedAt, err: e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : { message: String(e) } });
       process.exit(1);
     }
   });
+
+async function buildRepoMapAttachment(repoRoot: string, options: any): Promise<{ enabled: boolean; wikiDir: string; files: FileRank[] } | { enabled: boolean; skippedReason: string }> {
+  try {
+    const wikiDir = resolveWikiDir(repoRoot, String(options.wiki ?? ''));
+    const files = await generateRepoMap({
+      repoRoot,
+      maxFiles: Number(options.repoMapFiles ?? 20),
+      maxSymbolsPerFile: Number(options.repoMapSymbols ?? 5),
+      wikiDir,
+    });
+    return { enabled: true, wikiDir, files };
+  } catch (e: any) {
+    return { enabled: false, skippedReason: String(e?.message ?? e) };
+  }
+}
+
+function resolveWikiDir(repoRoot: string, wikiOpt: string): string {
+  const w = String(wikiOpt ?? '').trim();
+  if (w) return path.resolve(repoRoot, w);
+  const candidates = [path.join(repoRoot, 'docs', 'wiki'), path.join(repoRoot, 'wiki')];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return '';
+}

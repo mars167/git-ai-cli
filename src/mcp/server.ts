@@ -17,6 +17,7 @@ import { sha256Hex } from '../core/crypto';
 import { toPosixPath } from '../core/paths';
 import { createLogger } from '../core/log';
 import { checkIndex, resolveLangs } from '../core/indexCheck';
+import { generateRepoMap, type FileRank } from '../core/repoMap';
 
 export interface GitAIV2MCPServerOptions {
   disableAccessLog?: boolean;
@@ -101,6 +102,10 @@ export class GitAIV2MCPServer {
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
                 path: { type: 'string', description: 'Repository path (optional)' },
                 limit: { type: 'number', default: 50 },
+                with_repo_map: { type: 'boolean', default: false },
+                repo_map_max_files: { type: 'number', default: 20 },
+                repo_map_max_symbols: { type: 'number', default: 5 },
+                wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' },
               },
               required: ['query'],
             },
@@ -115,8 +120,25 @@ export class GitAIV2MCPServer {
                 path: { type: 'string', description: 'Repository path (optional)' },
                 topk: { type: 'number', default: 10 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
+                with_repo_map: { type: 'boolean', default: false },
+                repo_map_max_files: { type: 'number', default: 20 },
+                repo_map_max_symbols: { type: 'number', default: 5 },
+                wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' },
               },
               required: ['query'],
+            },
+          },
+          {
+            name: 'repo_map',
+            description: 'Generate a lightweight repository map (ranked files + top symbols + wiki links)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository path (optional)' },
+                max_files: { type: 'number', default: 20 },
+                max_symbols: { type: 'number', default: 5 },
+                wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' },
+              },
             },
           },
           {
@@ -510,6 +532,15 @@ export class GitAIV2MCPServer {
       }
 
       const repoRootForDispatch = await this.resolveRepoRoot(callPath);
+
+      if (name === 'repo_map') {
+        const wikiDir = resolveWikiDirInsideRepo(repoRootForDispatch, String((args as any).wiki_dir ?? ''));
+        const maxFiles = Number((args as any).max_files ?? 20);
+        const maxSymbolsPerFile = Number((args as any).max_symbols ?? 5);
+        const repoMap = await buildRepoMapAttachment(repoRootForDispatch, wikiDir, maxFiles, maxSymbolsPerFile);
+        return { content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, repo_map: repoMap }, null, 2) }] };
+      }
+
       if (name === 'search_symbols' && inferWorkspaceRoot(repoRootForDispatch)) {
         const query = String((args as any).query ?? '');
         const limit = Number((args as any).limit ?? 50);
@@ -525,8 +556,10 @@ export class GitAIV2MCPServer {
             ? res.rows.filter(r => !String((r as any).file ?? '').endsWith('.java'))
             : res.rows;
         const rows = filterAndRankSymbolRows(filteredByLang, { query, mode, caseInsensitive, limit });
+        const withRepoMap = Boolean((args as any).with_repo_map ?? false);
+        const repoMap = withRepoMap ? { enabled: false, skippedReason: 'workspace_mode_not_supported' } : undefined;
         return {
-          content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, lang: langSel, rows }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, lang: langSel, rows, ...(repoMap ? { repo_map: repoMap } : {}) }, null, 2) }],
         };
       }
 
@@ -537,6 +570,10 @@ export class GitAIV2MCPServer {
         const mode = inferSymbolSearchMode(query, (args as any).mode);
         const caseInsensitive = Boolean((args as any).case_insensitive ?? false);
         const maxCandidates = Math.max(limit, Number((args as any).max_candidates ?? Math.min(2000, limit * 20)));
+        const withRepoMap = Boolean((args as any).with_repo_map ?? false);
+        const wikiDir = resolveWikiDirInsideRepo(repoRootForDispatch, String((args as any).wiki_dir ?? ''));
+        const repoMapMaxFiles = Number((args as any).repo_map_max_files ?? 20);
+        const repoMapMaxSymbols = Number((args as any).repo_map_max_symbols ?? 5);
         const status = await checkIndex(repoRootForDispatch);
         if (!status.ok) {
           return { content: [{ type: 'text', text: JSON.stringify({ ...status, ok: false, reason: 'index_incompatible' }, null, 2) }], isError: true };
@@ -556,13 +593,18 @@ export class GitAIV2MCPServer {
           for (const r of rows as any[]) candidates.push({ ...r, lang });
         }
         const rows = filterAndRankSymbolRows(candidates as any[], { query, mode, caseInsensitive, limit });
-        return { content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, lang: langSel, rows }, null, 2) }] };
+        const repoMap = withRepoMap ? await buildRepoMapAttachment(repoRootForDispatch, wikiDir, repoMapMaxFiles, repoMapMaxSymbols) : undefined;
+        return { content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, lang: langSel, rows, ...(repoMap ? { repo_map: repoMap } : {}) }, null, 2) }] };
       }
 
       if (name === 'semantic_search') {
         const query = String((args as any).query ?? '');
         const topk = Number((args as any).topk ?? 10);
         const langSel = String((args as any).lang ?? 'auto');
+        const withRepoMap = Boolean((args as any).with_repo_map ?? false);
+        const wikiDir = resolveWikiDirInsideRepo(repoRootForDispatch, String((args as any).wiki_dir ?? ''));
+        const repoMapMaxFiles = Number((args as any).repo_map_max_files ?? 20);
+        const repoMapMaxSymbols = Number((args as any).repo_map_max_symbols ?? 5);
         const status = await checkIndex(repoRootForDispatch);
         if (!status.ok) {
           return { content: [{ type: 'text', text: JSON.stringify({ ...status, ok: false, reason: 'index_incompatible' }, null, 2) }], isError: true };
@@ -588,7 +630,8 @@ export class GitAIV2MCPServer {
           }
         }
         const rows = allScored.sort((a, b) => b.score - a.score).slice(0, topk);
-        return { content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, lang: langSel, rows }, null, 2) }] };
+        const repoMap = withRepoMap ? await buildRepoMapAttachment(repoRootForDispatch, wikiDir, repoMapMaxFiles, repoMapMaxSymbols) : undefined;
+        return { content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, lang: langSel, rows, ...(repoMap ? { repo_map: repoMap } : {}) }, null, 2) }] };
       }
 
       return {
@@ -615,4 +658,34 @@ export class GitAIV2MCPServer {
     await this.server.connect(transport);
     createLogger({ component: 'mcp' }).info('server_started', { startDir: this.startDir, transport: 'stdio' });
   }
+}
+
+async function buildRepoMapAttachment(
+  repoRoot: string,
+  wikiDir: string,
+  maxFiles: number,
+  maxSymbolsPerFile: number
+): Promise<{ enabled: true; wikiDir: string; files: FileRank[] } | { enabled: false; skippedReason: string }> {
+  try {
+    const files = await generateRepoMap({ repoRoot, maxFiles, maxSymbolsPerFile, wikiDir: wikiDir || undefined });
+    return { enabled: true, wikiDir, files };
+  } catch (e: any) {
+    return { enabled: false, skippedReason: String(e?.message ?? e) };
+  }
+}
+
+function resolveWikiDirInsideRepo(repoRoot: string, wikiOpt: string): string {
+  const w = String(wikiOpt ?? '').trim();
+  if (w) {
+    const abs = path.resolve(repoRoot, w);
+    const rel = path.relative(repoRoot, abs);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('wiki_dir escapes repository root');
+    if (fs.existsSync(abs)) return abs;
+    return '';
+  }
+  const candidates = [path.join(repoRoot, 'docs', 'wiki'), path.join(repoRoot, 'wiki')];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return '';
 }

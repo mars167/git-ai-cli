@@ -1,10 +1,12 @@
 import { Command } from 'commander';
 import path from 'path';
+import fs from 'fs-extra';
 import { resolveGitRoot } from '../core/git';
 import { defaultDbDir, openTablesByLang } from '../core/lancedb';
 import { buildQueryVector, scoreAgainst } from '../core/search';
 import { createLogger } from '../core/log';
 import { checkIndex, resolveLangs } from '../core/indexCheck';
+import { generateRepoMap, type FileRank } from '../core/repoMap';
 
 export const semanticCommand = new Command('semantic')
   .description('Semantic search using SQ8 vectors (brute-force over chunks)')
@@ -12,11 +14,16 @@ export const semanticCommand = new Command('semantic')
   .option('-p, --path <path>', 'Path inside the repository', '.')
   .option('-k, --topk <k>', 'Top K results', '10')
   .option('--lang <lang>', 'Language: auto|all|java|ts', 'auto')
+  .option('--with-repo-map', 'Attach a lightweight repo map (ranked files + top symbols + wiki links)', false)
+  .option('--repo-map-files <n>', 'Max repo map files', '20')
+  .option('--repo-map-symbols <n>', 'Max repo map symbols per file', '5')
+  .option('--wiki <dir>', 'Wiki directory (default: docs/wiki or wiki)', '')
   .action(async (text, options) => {
     const log = createLogger({ component: 'cli', cmd: 'ai semantic' });
     const startedAt = Date.now();
     try {
       const repoRoot = await resolveGitRoot(path.resolve(options.path));
+      const withRepoMap = Boolean((options as any).withRepoMap ?? false);
       const status = await checkIndex(repoRoot);
       if (!status.ok) {
         process.stderr.write(JSON.stringify({ ...status, ok: false, reason: 'index_incompatible' }, null, 2) + '\n');
@@ -87,9 +94,35 @@ export const semanticCommand = new Command('semantic')
       }));
 
       log.info('semantic_search', { ok: true, repoRoot, topk: k, lang: langSel, langs, chunks: totalChunks, hits: hits.length, duration_ms: Date.now() - startedAt });
-      console.log(JSON.stringify({ repoRoot, topk: k, lang: langSel, hits }, null, 2));
+      const repoMap = withRepoMap ? await buildRepoMapAttachment(repoRoot, options) : undefined;
+      console.log(JSON.stringify({ repoRoot, topk: k, lang: langSel, hits, ...(repoMap ? { repo_map: repoMap } : {}) }, null, 2));
     } catch (e) {
       log.error('semantic_search', { ok: false, duration_ms: Date.now() - startedAt, err: e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : { message: String(e) } });
       process.exit(1);
     }
   });
+
+async function buildRepoMapAttachment(repoRoot: string, options: any): Promise<{ enabled: boolean; wikiDir: string; files: FileRank[] } | { enabled: boolean; skippedReason: string }> {
+  try {
+    const wikiDir = resolveWikiDir(repoRoot, String(options.wiki ?? ''));
+    const files = await generateRepoMap({
+      repoRoot,
+      maxFiles: Number(options.repoMapFiles ?? 20),
+      maxSymbolsPerFile: Number(options.repoMapSymbols ?? 5),
+      wikiDir,
+    });
+    return { enabled: true, wikiDir, files };
+  } catch (e: any) {
+    return { enabled: false, skippedReason: String(e?.message ?? e) };
+  }
+}
+
+function resolveWikiDir(repoRoot: string, wikiOpt: string): string {
+  const w = String(wikiOpt ?? '').trim();
+  if (w) return path.resolve(repoRoot, w);
+  const candidates = [path.join(repoRoot, 'docs', 'wiki'), path.join(repoRoot, 'wiki')];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return '';
+}
