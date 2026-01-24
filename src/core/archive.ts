@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import * as tar from 'tar';
+import { splitPosixPath, toPosixPath } from './paths';
 
 export interface ArchivePaths {
   gitAiDir: string;
@@ -23,17 +24,17 @@ export async function packLanceDb(repoRoot: string): Promise<{ archivePath: stri
   }
   await fs.remove(archivePath);
   const entries: string[] = [];
-  const walk = async (rel: string) => {
-    const abs = path.join(gitAiDir, rel);
+  const walk = async (relPosix: string) => {
+    const abs = path.join(gitAiDir, ...splitPosixPath(relPosix));
     const stat = await fs.stat(abs);
     if (stat.isDirectory()) {
       const children = (await fs.readdir(abs)).sort((a, b) => a.localeCompare(b));
       for (const c of children) {
-        await walk(path.join(rel, c));
+        await walk(path.posix.join(relPosix, toPosixPath(c)));
       }
       return;
     }
-    entries.push(rel);
+    entries.push(relPosix);
   };
   await walk('lancedb');
 

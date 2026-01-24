@@ -35,6 +35,7 @@ description: "通过 git-ai 的 MCP 工具检视/检索代码仓。用户要“�
 - `search_symbols({ query: "FooBar", limit: 50 })`
 - `search_symbols({ query: "get*repo", mode: "wildcard", case_insensitive: true, limit: 20 })`
 - `search_symbols({ query: "^get.*repo$", mode: "regex", case_insensitive: true, limit: 20 })`
+- 混合仓库建议指定语言避免噪声：`search_symbols({ query: "deleteDictDataByIds", lang: "java", limit: 50 })`
 
 输出 rows 后，选最可能的 1-3 个命中点继续读代码：
 - `read_file({ file: "src/xxx.ts", start_line: 1, end_line: 220 })`
@@ -43,6 +44,7 @@ description: "通过 git-ai 的 MCP 工具检视/检索代码仓。用户要“�
 ### 2) 语义检索（问法更自然）
 当用户描述行为（“在哪里初始化 DB / 哪里处理 auth / 错误如何返回”）：
 - `semantic_search({ query: "where do we ...", topk: 5 })`
+- 混合仓库建议指定语言避免噪声：`semantic_search({ query: "删除字典数据", lang: "java", topk: 5 })`
 
 语义检索返回的是摘要行（file/kind/signature），仍需要用 `read_file` 打开文件确认真实实现。
 
@@ -53,6 +55,13 @@ description: "通过 git-ai 的 MCP 工具检视/检索代码仓。用户要“�
 
 ### 4) AST 图查询（递归/关系类问题）
 当你需要回答“包含关系/继承关系/子节点列表/递归查询”等问题：
+- `ast_graph_find({ prefix: "Foo", limit: 20 })`
+- `ast_graph_children({ id: "src/mcp/server.ts", as_file: true })`
+- “引用/调用链”优先用高阶接口（比写 CozoScript 更稳定）：
+  - `ast_graph_refs({ name: "greet", limit: 200 })`
+  - `ast_graph_callers({ name: "greet", limit: 200 })`
+  - `ast_graph_callees({ name: "hello", limit: 200 })`
+  - `ast_graph_chain({ name: "greet", direction: "upstream", max_depth: 3, lang: "java" })`
 - `ast_graph_query({ query: "<CozoScript>", params: {...} })`
 
 ## 输出要求（给用户的答复）

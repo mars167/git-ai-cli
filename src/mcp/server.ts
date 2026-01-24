@@ -3,39 +3,47 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import fs from 'fs-extra';
 import path from 'path';
+import os from 'os';
 import { glob } from 'glob';
-import { inferScanRoot, inferWorkspaceRoot, resolveGitRoot } from '../core/git';
+import { resolveGitRoot, inferScanRoot, inferWorkspaceRoot } from '../core/git';
 import { packLanceDb, unpackLanceDb } from '../core/archive';
-import { defaultDbDir, openTables } from '../core/lancedb';
+import { defaultDbDir, openTablesByLang } from '../core/lancedb';
 import { ensureLfsTracking } from '../core/lfs';
-import { IndexerV2 } from '../core/indexer';
 import { buildQueryVector, scoreAgainst } from '../core/search';
 import { queryManifestWorkspace } from '../core/workspace';
-import { runAstGraphQuery } from '../core/astGraphQuery';
+import { buildCallChainDownstreamByNameQuery, buildCallChainUpstreamByNameQuery, buildCalleesByNameQuery, buildCallersByNameQuery, buildChildrenQuery, buildFindReferencesQuery, buildFindSymbolsQuery, runAstGraphQuery } from '../core/astGraphQuery';
 import { buildCoarseWhere, filterAndRankSymbolRows, inferSymbolSearchMode, pickCoarseToken } from '../core/symbolSearch';
+import { sha256Hex } from '../core/crypto';
+import { toPosixPath } from '../core/paths';
+import { createLogger } from '../core/log';
+import { checkIndex, resolveLangs } from '../core/indexCheck';
+
+export interface GitAIV2MCPServerOptions {
+  disableAccessLog?: boolean;
+}
 
 export class GitAIV2MCPServer {
   private server: Server;
   private startDir: string;
+  private options: GitAIV2MCPServerOptions;
 
-  constructor(startDir: string) {
+  constructor(startDir: string, options: GitAIV2MCPServerOptions = {}) {
     this.startDir = path.resolve(startDir);
+    this.options = options;
     this.server = new Server(
-      { name: 'git-ai-v2', version: '2.0.0' },
+      { name: 'git-ai-v2', version: '1.1.1' },
       { capabilities: { tools: {} } }
     );
     this.setupHandlers();
   }
 
-  private async open(startDir?: string) {
+  private async openRepoContext(startDir?: string) {
     const repoRoot = await resolveGitRoot(path.resolve(startDir ?? this.startDir));
-    const dbDir = defaultDbDir(repoRoot);
     const metaPath = path.join(repoRoot, '.git-ai', 'meta.json');
     const meta = await fs.pathExists(metaPath) ? await fs.readJSON(metaPath).catch(() => null) : null;
     const dim = typeof meta?.dim === 'number' ? meta.dim : 256;
     const scanRoot = path.resolve(repoRoot, typeof meta?.scanRoot === 'string' ? meta.scanRoot : path.relative(repoRoot, inferScanRoot(repoRoot)));
-    const tables = await openTables({ dbDir, dim, mode: 'create_if_missing' });
-    return { repoRoot, scanRoot, dim, ...tables };
+    return { repoRoot, scanRoot, dim, meta };
   }
 
   private async resolveRepoRoot(callPath?: string) {
@@ -44,9 +52,31 @@ export class GitAIV2MCPServer {
 
   private assertPathInsideRoot(rootDir: string, file: string) {
     const abs = path.resolve(rootDir, file);
-    const root = path.resolve(rootDir) + path.sep;
-    if (!abs.startsWith(root)) throw new Error('Path escapes repository root');
+    const rel = path.relative(path.resolve(rootDir), abs);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('Path escapes repository root');
     return abs;
+  }
+
+  private async writeAccessLog(name: string, args: any, duration: number, ok: boolean, repoRoot?: string) {
+    if (this.options.disableAccessLog) return;
+    if (process.env.GIT_AI_DISABLE_MCP_ACCESS_LOG === 'true' || process.env.GIT_AI_DISABLE_MCP_ACCESS_LOG === '1') return;
+
+    try {
+      const logDir = path.join(os.homedir(), '.git-ai', 'logs');
+      await fs.ensureDir(logDir);
+      const logFile = path.join(logDir, 'mcp-access.log');
+      const entry = {
+        ts: new Date().toISOString(),
+        tool: name,
+        repo: repoRoot ? path.basename(repoRoot) : 'unknown',
+        duration_ms: duration,
+        ok,
+        args: JSON.stringify(args).slice(0, 1000), // Avoid overly large logs
+      };
+      await fs.appendFile(logFile, JSON.stringify(entry) + '\n', 'utf-8');
+    } catch (e) {
+      // ignore
+    }
   }
 
   private setupHandlers() {
@@ -68,6 +98,7 @@ export class GitAIV2MCPServer {
                 mode: { type: 'string', enum: ['substring', 'prefix', 'wildcard', 'regex', 'fuzzy'] },
                 case_insensitive: { type: 'boolean', default: false },
                 max_candidates: { type: 'number', default: 1000 },
+                lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
                 path: { type: 'string', description: 'Repository path (optional)' },
                 limit: { type: 'number', default: 50 },
               },
@@ -83,19 +114,18 @@ export class GitAIV2MCPServer {
                 query: { type: 'string' },
                 path: { type: 'string', description: 'Repository path (optional)' },
                 topk: { type: 'number', default: 10 },
+                lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
               },
               required: ['query'],
             },
           },
           {
-            name: 'index_repo',
-            description: 'Build or update the repository index (.git-ai/lancedb)',
+            name: 'check_index',
+            description: 'Check whether the repository index structure matches current expected schema',
             inputSchema: {
               type: 'object',
               properties: {
                 path: { type: 'string', description: 'Repository path (optional)' },
-                dim: { type: 'number', default: 256 },
-                overwrite: { type: 'boolean', default: false },
               },
             },
           },
@@ -159,7 +189,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'ast_graph_query',
-            description: 'Run a CozoScript query against the AST graph database',
+            description: 'Run a CozoScript query against the AST graph database (advanced)',
             inputSchema: {
               type: 'object',
               properties: {
@@ -170,6 +200,92 @@ export class GitAIV2MCPServer {
               required: ['query'],
             },
           },
+          {
+            name: 'ast_graph_find',
+            description: 'Find symbols by name prefix (case-insensitive) using the AST graph',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                prefix: { type: 'string' },
+                path: { type: 'string', description: 'Repository path (optional)' },
+                limit: { type: 'number', default: 50 },
+                lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
+              },
+              required: ['prefix'],
+            },
+          },
+          {
+            name: 'ast_graph_children',
+            description: 'List direct children in the AST containment graph (file -> top-level symbols, class -> methods)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Parent id (ref_id or file_id; or file path when as_file=true)' },
+                as_file: { type: 'boolean', default: false },
+                path: { type: 'string', description: 'Repository path (optional)' },
+              },
+              required: ['id'],
+            },
+          },
+          {
+            name: 'ast_graph_refs',
+            description: 'Find reference locations by name (calls/new/type)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                limit: { type: 'number', default: 200 },
+                lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
+                path: { type: 'string', description: 'Repository path (optional)' },
+              },
+              required: ['name'],
+            },
+          },
+          {
+            name: 'ast_graph_callers',
+            description: 'Find callers by callee name',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                limit: { type: 'number', default: 200 },
+                lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
+                path: { type: 'string', description: 'Repository path (optional)' },
+              },
+              required: ['name'],
+            },
+          },
+          {
+            name: 'ast_graph_callees',
+            description: 'Find callees by caller name',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                limit: { type: 'number', default: 200 },
+                lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
+                path: { type: 'string', description: 'Repository path (optional)' },
+              },
+              required: ['name'],
+            },
+          },
+          {
+            name: 'ast_graph_chain',
+            description: 'Compute call chain by symbol name (heuristic, name-based)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                direction: { type: 'string', enum: ['downstream', 'upstream'], default: 'downstream' },
+                max_depth: { type: 'number', default: 3 },
+                limit: { type: 'number', default: 500 },
+                min_name_len: { type: 'number', default: 1 },
+                lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
+                path: { type: 'string', description: 'Repository path (optional)' },
+              },
+              required: ['name'],
+            },
+          },
         ],
       };
     });
@@ -178,10 +294,15 @@ export class GitAIV2MCPServer {
       const name = request.params.name;
       const args = request.params.arguments ?? {};
       const callPath = typeof (args as any).path === 'string' ? String((args as any).path) : undefined;
+      const log = createLogger({ component: 'mcp', tool: name });
+      const startedAt = Date.now();
+
+      const response = await (async () => {
 
       if (name === 'get_repo') {
-        const repoRoot = await this.resolveRepoRoot(callPath);
-        const scanRoot = (await this.open(callPath)).scanRoot;
+        const ctx = await this.openRepoContext(callPath);
+        const repoRoot = ctx.repoRoot;
+        const scanRoot = ctx.scanRoot;
         return {
           content: [{ type: 'text', text: JSON.stringify({ ok: true, startDir: this.startDir, repoRoot, scanRoot }, null, 2) }],
         };
@@ -190,22 +311,20 @@ export class GitAIV2MCPServer {
       if (name === 'set_repo') {
         const p = String((args as any).path ?? '');
         this.startDir = path.resolve(p);
-        const repoRoot = await resolveGitRoot(this.startDir);
-        const scanRoot = (await this.open(this.startDir)).scanRoot;
+        const ctx = await this.openRepoContext(this.startDir);
+        const repoRoot = ctx.repoRoot;
+        const scanRoot = ctx.scanRoot;
         return {
           content: [{ type: 'text', text: JSON.stringify({ ok: true, startDir: this.startDir, repoRoot, scanRoot }, null, 2) }],
         };
       }
 
-      if (name === 'index_repo') {
+      if (name === 'check_index') {
         const repoRoot = await this.resolveRepoRoot(callPath);
-        const scanRoot = inferScanRoot(repoRoot);
-        const dim = Number((args as any).dim ?? 256);
-        const overwrite = Boolean((args as any).overwrite ?? false);
-        const indexer = new IndexerV2({ repoRoot, scanRoot, dim, overwrite });
-        await indexer.run();
+        const res = await checkIndex(repoRoot);
         return {
-          content: [{ type: 'text', text: JSON.stringify({ ok: true, repoRoot, scanRoot, dim, overwrite }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot, ...res }, null, 2) }],
+          isError: !res.ok,
         };
       }
 
@@ -227,7 +346,7 @@ export class GitAIV2MCPServer {
       }
 
       if (name === 'list_files') {
-        const { repoRoot, scanRoot } = await this.open(callPath);
+        const { repoRoot, scanRoot } = await this.openRepoContext(callPath);
         const pattern = String((args as any).pattern ?? '**/*');
         const limit = Number((args as any).limit ?? 500);
         const files = await glob(pattern, {
@@ -242,7 +361,7 @@ export class GitAIV2MCPServer {
       }
 
       if (name === 'read_file') {
-        const { repoRoot, scanRoot } = await this.open(callPath);
+        const { repoRoot, scanRoot } = await this.openRepoContext(callPath);
         const file = String((args as any).file ?? '');
         const startLine = Math.max(1, Number((args as any).start_line ?? 1));
         const endLine = Math.max(startLine, Number((args as any).end_line ?? startLine + 199));
@@ -266,6 +385,130 @@ export class GitAIV2MCPServer {
         };
       }
 
+      if (name === 'ast_graph_find') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const prefix = String((args as any).prefix ?? '');
+        const limit = Number((args as any).limit ?? 50);
+        const langSel = String((args as any).lang ?? 'auto');
+        const status = await checkIndex(repoRoot);
+        if (!status.ok) {
+          return { content: [{ type: 'text', text: JSON.stringify({ ...status, ok: false, reason: 'index_incompatible' }, null, 2) }], isError: true };
+        }
+        const langs = resolveLangs(status.found.meta ?? null, langSel as any);
+        const allRows: any[] = [];
+        for (const lang of langs) {
+          const result = await runAstGraphQuery(repoRoot, buildFindSymbolsQuery(lang), { prefix, lang });
+          const rows = Array.isArray((result as any)?.rows) ? (result as any).rows : [];
+          for (const r of rows) allRows.push(r);
+        }
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot, lang: langSel, result: { headers: ['ref_id', 'file', 'lang', 'name', 'kind', 'signature', 'start_line', 'end_line'], rows: allRows.slice(0, limit) } }, null, 2) }],
+        };
+      }
+
+      if (name === 'ast_graph_children') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const id = String((args as any).id ?? '');
+        const asFile = Boolean((args as any).as_file ?? false);
+        const parent_id = asFile ? sha256Hex(`file:${toPosixPath(id)}`) : id;
+        const result = await runAstGraphQuery(repoRoot, buildChildrenQuery(), { parent_id });
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot, parent_id, result }, null, 2) }],
+        };
+      }
+
+      if (name === 'ast_graph_refs') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const target = String((args as any).name ?? '');
+        const limit = Number((args as any).limit ?? 200);
+        const langSel = String((args as any).lang ?? 'auto');
+        const status = await checkIndex(repoRoot);
+        if (!status.ok) {
+          return { content: [{ type: 'text', text: JSON.stringify({ ...status, ok: false, reason: 'index_incompatible' }, null, 2) }], isError: true };
+        }
+        const langs = resolveLangs(status.found.meta ?? null, langSel as any);
+        const allRows: any[] = [];
+        for (const lang of langs) {
+          const result = await runAstGraphQuery(repoRoot, buildFindReferencesQuery(lang), { name: target, lang });
+          const rows = Array.isArray((result as any)?.rows) ? (result as any).rows : [];
+          for (const r of rows) allRows.push(r);
+        }
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot, name: target, lang: langSel, result: { headers: ['file', 'line', 'col', 'ref_kind', 'from_id', 'from_kind', 'from_name', 'from_lang'], rows: allRows.slice(0, limit) } }, null, 2) }],
+        };
+      }
+
+      if (name === 'ast_graph_callers') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const target = String((args as any).name ?? '');
+        const limit = Number((args as any).limit ?? 200);
+        const langSel = String((args as any).lang ?? 'auto');
+        const status = await checkIndex(repoRoot);
+        if (!status.ok) {
+          return { content: [{ type: 'text', text: JSON.stringify({ ...status, ok: false, reason: 'index_incompatible' }, null, 2) }], isError: true };
+        }
+        const langs = resolveLangs(status.found.meta ?? null, langSel as any);
+        const allRows: any[] = [];
+        for (const lang of langs) {
+          const result = await runAstGraphQuery(repoRoot, buildCallersByNameQuery(lang), { name: target, lang });
+          const rows = Array.isArray((result as any)?.rows) ? (result as any).rows : [];
+          for (const r of rows) allRows.push(r);
+        }
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot, name: target, lang: langSel, result: { headers: ['caller_id', 'caller_kind', 'caller_name', 'file', 'line', 'col', 'caller_lang'], rows: allRows.slice(0, limit) } }, null, 2) }],
+        };
+      }
+
+      if (name === 'ast_graph_callees') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const target = String((args as any).name ?? '');
+        const limit = Number((args as any).limit ?? 200);
+        const langSel = String((args as any).lang ?? 'auto');
+        const status = await checkIndex(repoRoot);
+        if (!status.ok) {
+          return { content: [{ type: 'text', text: JSON.stringify({ ...status, ok: false, reason: 'index_incompatible' }, null, 2) }], isError: true };
+        }
+        const langs = resolveLangs(status.found.meta ?? null, langSel as any);
+        const allRows: any[] = [];
+        for (const lang of langs) {
+          const result = await runAstGraphQuery(repoRoot, buildCalleesByNameQuery(lang), { name: target, lang });
+          const rows = Array.isArray((result as any)?.rows) ? (result as any).rows : [];
+          for (const r of rows) allRows.push(r);
+        }
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot, name: target, lang: langSel, result: { headers: ['caller_id', 'caller_lang', 'callee_id', 'callee_file', 'callee_name', 'callee_kind', 'file', 'line', 'col'], rows: allRows.slice(0, limit) } }, null, 2) }],
+        };
+      }
+
+      if (name === 'ast_graph_chain') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const target = String((args as any).name ?? '');
+        const direction = String((args as any).direction ?? 'downstream');
+        const maxDepth = Number((args as any).max_depth ?? 3);
+        const limit = Number((args as any).limit ?? 500);
+        const minNameLen = Math.max(1, Number((args as any).min_name_len ?? 1));
+        const langSel = String((args as any).lang ?? 'auto');
+        const status = await checkIndex(repoRoot);
+        if (!status.ok) {
+          return { content: [{ type: 'text', text: JSON.stringify({ ...status, ok: false, reason: 'index_incompatible' }, null, 2) }], isError: true };
+        }
+        const langs = resolveLangs(status.found.meta ?? null, langSel as any);
+        const query = direction === 'upstream' ? buildCallChainUpstreamByNameQuery() : buildCallChainDownstreamByNameQuery();
+        const rawRows: any[] = [];
+        for (const lang of langs) {
+          const result = await runAstGraphQuery(repoRoot, query, { name: target, max_depth: maxDepth, lang });
+          const rows = Array.isArray((result as any)?.rows) ? (result as any).rows : [];
+          for (const r of rows) rawRows.push(r);
+        }
+        const filtered = minNameLen > 1
+          ? rawRows.filter((r: any[]) => String(r?.[3] ?? '').length >= minNameLen && String(r?.[4] ?? '').length >= minNameLen)
+          : rawRows;
+        const rows = filtered.slice(0, limit);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot, name: target, lang: langSel, direction, max_depth: maxDepth, min_name_len: minNameLen, result: { headers: ['caller_id', 'callee_id', 'depth', 'caller_name', 'callee_name', 'lang'], rows } }, null, 2) }],
+        };
+      }
+
       const repoRootForDispatch = await this.resolveRepoRoot(callPath);
       if (name === 'search_symbols' && inferWorkspaceRoot(repoRootForDispatch)) {
         const query = String((args as any).query ?? '');
@@ -275,57 +518,101 @@ export class GitAIV2MCPServer {
         const maxCandidates = Math.max(limit, Number((args as any).max_candidates ?? Math.min(2000, limit * 20)));
         const keyword = (mode === 'substring' || mode === 'prefix') ? query : pickCoarseToken(query);
         const res = await queryManifestWorkspace({ manifestRepoRoot: repoRootForDispatch, keyword, limit: maxCandidates });
-        const rows = filterAndRankSymbolRows(res.rows, { query, mode, caseInsensitive, limit });
+        const langSel = String((args as any).lang ?? 'auto');
+        const filteredByLang = (langSel === 'java')
+          ? res.rows.filter(r => String((r as any).file ?? '').endsWith('.java'))
+          : (langSel === 'ts')
+            ? res.rows.filter(r => !String((r as any).file ?? '').endsWith('.java'))
+            : res.rows;
+        const rows = filterAndRankSymbolRows(filteredByLang, { query, mode, caseInsensitive, limit });
         return {
-          content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, rows }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, lang: langSel, rows }, null, 2) }],
         };
       }
-
-      const { refs, chunks, repoRoot, dim } = await this.open(callPath);
 
       if (name === 'search_symbols') {
         const query = String((args as any).query ?? '');
         const limit = Number((args as any).limit ?? 50);
+        const langSel = String((args as any).lang ?? 'auto');
         const mode = inferSymbolSearchMode(query, (args as any).mode);
         const caseInsensitive = Boolean((args as any).case_insensitive ?? false);
         const maxCandidates = Math.max(limit, Number((args as any).max_candidates ?? Math.min(2000, limit * 20)));
+        const status = await checkIndex(repoRootForDispatch);
+        if (!status.ok) {
+          return { content: [{ type: 'text', text: JSON.stringify({ ...status, ok: false, reason: 'index_incompatible' }, null, 2) }], isError: true };
+        }
+        const langs = resolveLangs(status.found.meta ?? null, langSel as any);
+        const dim = typeof status.found.meta?.dim === 'number' ? status.found.meta.dim : 256;
+        const dbDir = defaultDbDir(repoRootForDispatch);
+        const { byLang } = await openTablesByLang({ dbDir, dim, mode: 'open_only', languages: langs });
         const where = buildCoarseWhere({ query, mode, caseInsensitive });
-        const candidates = where
-          ? await refs.query().where(where).limit(maxCandidates).toArray()
-          : await refs.query().limit(maxCandidates).toArray();
+        const candidates: any[] = [];
+        for (const lang of langs) {
+          const t = byLang[lang];
+          if (!t) continue;
+          const rows = where
+            ? await t.refs.query().where(where).limit(maxCandidates).toArray()
+            : await t.refs.query().limit(maxCandidates).toArray();
+          for (const r of rows as any[]) candidates.push({ ...r, lang });
+        }
         const rows = filterAndRankSymbolRows(candidates as any[], { query, mode, caseInsensitive, limit });
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ repoRoot, rows }, null, 2) }],
-        };
+        return { content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, lang: langSel, rows }, null, 2) }] };
       }
 
       if (name === 'semantic_search') {
         const query = String((args as any).query ?? '');
         const topk = Number((args as any).topk ?? 10);
+        const langSel = String((args as any).lang ?? 'auto');
+        const status = await checkIndex(repoRootForDispatch);
+        if (!status.ok) {
+          return { content: [{ type: 'text', text: JSON.stringify({ ...status, ok: false, reason: 'index_incompatible' }, null, 2) }], isError: true };
+        }
+        const langs = resolveLangs(status.found.meta ?? null, langSel as any);
+        const dim = typeof status.found.meta?.dim === 'number' ? status.found.meta.dim : 256;
+        const dbDir = defaultDbDir(repoRootForDispatch);
+        const { byLang } = await openTablesByLang({ dbDir, dim, mode: 'open_only', languages: langs });
         const q = buildQueryVector(query, dim);
 
-        const chunkRows = await chunks.query().select(['content_hash', 'text', 'dim', 'scale', 'qvec_b64']).limit(1_000_000).toArray();
-        const scored = (chunkRows as any[]).map(r => ({
-          content_hash: String(r.content_hash),
-          score: scoreAgainst(q, { dim: Number(r.dim), scale: Number(r.scale), qvec: new Int8Array(Buffer.from(String(r.qvec_b64), 'base64')) }),
-          text: String(r.text),
-        })).sort((a, b) => b.score - a.score).slice(0, topk);
-
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ repoRoot, rows: scored }, null, 2) }],
-        };
+        const allScored: any[] = [];
+        for (const lang of langs) {
+          const t = byLang[lang];
+          if (!t) continue;
+          const chunkRows = await t.chunks.query().select(['content_hash', 'text', 'dim', 'scale', 'qvec_b64']).limit(1_000_000).toArray();
+          for (const r of chunkRows as any[]) {
+            allScored.push({
+              lang,
+              content_hash: String(r.content_hash),
+              score: scoreAgainst(q, { dim: Number(r.dim), scale: Number(r.scale), qvec: new Int8Array(Buffer.from(String(r.qvec_b64), 'base64')) }),
+              text: String(r.text),
+            });
+          }
+        }
+        const rows = allScored.sort((a, b) => b.score - a.score).slice(0, topk);
+        return { content: [{ type: 'text', text: JSON.stringify({ repoRoot: repoRootForDispatch, lang: langSel, rows }, null, 2) }] };
       }
 
       return {
         content: [{ type: 'text', text: 'Tool not found' }],
         isError: true,
       };
+      })().catch((e) => {
+        const err = e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : { message: String(e) };
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ ok: false, tool: name, error: err }, null, 2) }],
+          isError: true,
+        };
+      });
+
+      log.info('tool_call', { ok: !response.isError, duration_ms: Date.now() - startedAt, path: callPath });
+      const repoRootForLog = await this.resolveRepoRoot(callPath).catch(() => undefined);
+      await this.writeAccessLog(name, args, Date.now() - startedAt, !response.isError, repoRootForLog);
+      return response;
     });
   }
 
   async start() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('Git-AI v2 MCP Server running on stdio');
+    createLogger({ component: 'mcp' }).info('server_started', { startDir: this.startDir, transport: 'stdio' });
   }
 }

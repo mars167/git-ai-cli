@@ -50,7 +50,11 @@ async function createBareRemote(baseDir, name) {
 }
 
 test('git-ai works in Spring Boot and Vue repos', async () => {
-  runOk('node', [CLI, '--version'], process.cwd());
+  {
+    const pkg = JSON.parse(await fs.readFile(path.resolve(__dirname, '..', 'package.json'), 'utf-8'));
+    const res = runOk('node', [CLI, '--version'], process.cwd());
+    assert.equal(res.stdout.trim(), String(pkg.version));
+  }
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'git-ai-e2e-'));
   const springRepo = await createRepo(tmp, 'spring-boot-jdk17', {
@@ -78,11 +82,13 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     runOk('node', [CLI, 'status'], repo);
     runOk('node', [CLI, 'ai', 'index', '--overwrite'], repo);
     runOk('node', [CLI, 'ai', 'pack'], repo);
+    runOk('node', [CLI, 'ai', 'pack', '--lfs'], repo);
     runOk('git', ['add', '.git-ai/meta.json', '.git-ai/lancedb.tar.gz'], repo);
     runOk('git', ['commit', '-m', 'add git-ai index'], repo);
 
     const meta = await fs.readFile(path.join(repo, '.git-ai', 'meta.json'), 'utf-8');
     assert.ok(meta.includes('"version"'));
+    assert.ok(meta.includes('"index_schema_version": 3'));
     const archivePath = path.join(repo, '.git-ai', 'lancedb.tar.gz');
     const stat = await fs.stat(archivePath);
     assert.ok(stat.size > 0);
@@ -91,12 +97,27 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     runOk('node', [CLI, 'ai', 'unpack'], repo);
     const stat2 = await fs.stat(path.join(repo, '.git-ai', 'lancedb'));
     assert.ok(stat2.isDirectory());
+    runOk('node', [CLI, 'ai', 'check-index'], repo);
 
     runOk('node', [CLI, 'ai', 'hooks', 'install'], repo);
     const hooksPath = runOk('git', ['config', '--get', 'core.hooksPath'], repo).stdout.trim();
     assert.equal(hooksPath, '.githooks');
     const hookFile = await fs.stat(path.join(repo, '.githooks', 'pre-commit'));
     assert.ok(hookFile.isFile());
+
+    {
+      const res = runOk('node', [CLI, 'ai', 'hooks', 'status'], repo);
+      const obj = JSON.parse(res.stdout);
+      assert.equal(obj.ok, true);
+      assert.equal(obj.installed, true);
+    }
+
+    {
+      const res = runOk('node', [CLI, 'ai', 'hooks', 'uninstall'], repo);
+      const obj = JSON.parse(res.stdout);
+      assert.equal(obj.ok, true);
+      assert.equal(obj.hooksPath, null);
+    }
   }
 
   {
@@ -111,6 +132,55 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     const obj = JSON.parse(res.stdout);
     assert.ok(obj.count > 0);
     assert.ok(obj.rows.some(r => String(r.file || '').includes('app/src/main/java/')));
+  }
+
+  {
+    const res = runOk('node', [CLI, 'ai', 'semantic', 'hello controller', '--topk', '5'], springRepo);
+    const obj = JSON.parse(res.stdout);
+    assert.ok(Array.isArray(obj.hits));
+    assert.ok(obj.hits.length > 0);
+  }
+
+  {
+    const res = runOk('node', [CLI, 'ai', 'graph', 'find', 'HelloController'], springRepo);
+    const obj = JSON.parse(res.stdout);
+    assert.ok(Array.isArray(obj.result?.rows));
+    assert.ok(obj.result.rows.length > 0);
+  }
+
+  {
+    const res = runOk('node', [CLI, 'ai', 'graph', 'children', 'src/main/java/com/example/demo/api/HelloController.java', '--as-file'], springRepo);
+    const obj = JSON.parse(res.stdout);
+    assert.ok(Array.isArray(obj.result?.rows));
+    assert.ok(typeof obj.parent_id === 'string' && obj.parent_id.length > 0);
+  }
+
+  {
+    const res = runOk('node', [CLI, 'ai', 'graph', 'query', "?[ref_id] := *ast_symbol{ref_id, file, lang, name: 'HelloController', kind, signature, start_line, end_line}"], springRepo);
+    const obj = JSON.parse(res.stdout);
+    assert.ok(Array.isArray(obj.result?.rows));
+    assert.ok(obj.result.rows.length > 0);
+  }
+
+  {
+    const res = runOk('node', [CLI, 'ai', 'graph', 'callers', 'greet', '--limit', '50'], springRepo);
+    const obj = JSON.parse(res.stdout);
+    assert.ok(Array.isArray(obj.result?.rows));
+    assert.ok(obj.result.rows.length > 0);
+  }
+
+  {
+    const res = runOk('node', [CLI, 'ai', 'graph', 'refs', 'greet', '--limit', '50'], springRepo);
+    const obj = JSON.parse(res.stdout);
+    assert.ok(Array.isArray(obj.result?.rows));
+    assert.ok(obj.result.rows.length > 0);
+  }
+
+  {
+    const res = runOk('node', [CLI, 'ai', 'graph', 'chain', 'greet', '--direction', 'upstream', '--depth', '2', '--limit', '200'], springRepo);
+    const obj = JSON.parse(res.stdout);
+    assert.ok(Array.isArray(obj.result?.rows));
+    assert.ok(obj.result.rows.length > 0);
   }
 
   for (const repo of [springRepo, springMultiRepo, vueRepo]) {

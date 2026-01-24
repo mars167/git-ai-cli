@@ -20,13 +20,20 @@ git-ai ai serve
 
 ### 索引管理
 - `index_repo({ path?, dim?, overwrite? })`：构建/更新索引
+- `check_index({ path? })`：检查索引结构是否与当前版本一致（不一致需重建索引）
 - `pack_index({ path?, lfs? })`：打包索引为 `.git-ai/lancedb.tar.gz`（可选启用 git-lfs track）
 - `unpack_index({ path? })`：解包索引归档
 
 ### 检索
-- `search_symbols({ query, mode?, case_insensitive?, max_candidates?, limit?, path? })`：符号检索（默认 substring；支持 prefix/wildcard/regex/fuzzy）
-- `semantic_search({ query, topk?, path? })`：基于 LanceDB + SQ8 的语义检索
-- `ast_graph_query({ query, params?, path? })`：对 AST 图数据库执行 CozoScript 查询
+- `search_symbols({ query, mode?, case_insensitive?, max_candidates?, limit?, lang?, path? })`：符号检索（lang: auto/all/java/ts）
+- `semantic_search({ query, topk?, lang?, path? })`：基于 LanceDB + SQ8 的语义检索（lang: auto/all/java/ts）
+- `ast_graph_find({ prefix, limit?, lang?, path? })`：按名字前缀查找符号定义（大小写不敏感；lang: auto/all/java/ts）
+- `ast_graph_children({ id, as_file?, path? })`：列出包含关系的直接子节点（文件→顶层符号、类→方法等）
+- `ast_graph_refs({ name, limit?, lang?, path? })`：按名字查引用位置（call/new/type；lang: auto/all/java/ts）
+- `ast_graph_callers({ name, limit?, lang?, path? })`：按名字查调用者（callee name；lang: auto/all/java/ts）
+- `ast_graph_callees({ name, limit?, lang?, path? })`：按名字查被调用者（caller name；lang: auto/all/java/ts）
+- `ast_graph_chain({ name, direction?, max_depth?, limit?, lang?, path? })`：按名字查调用链路（upstream/downstream，最大深度；lang: auto/all/java/ts）
+- `ast_graph_query({ query, params?, path? })`：对 AST 图数据库执行 CozoScript 查询（进阶）
 
 ### 文件读取
 - `list_files({ path?, pattern?, limit? })`：按 glob 列文件（默认忽略 node_modules, .git 等）
@@ -34,7 +41,20 @@ git-ai ai serve
 
 ## AST 图查询示例
 
-列出指定文件里的顶层符号（先把 file path 转为 file_id）：
+列出指定文件里的顶层符号（推荐：无需手动算 file_id）：
+
+```js
+ast_graph_children({ id: "src/mcp/server.ts", as_file: true })
+```
+
+查询某个方法/函数的调用者（推荐：用 callers/callees/chain，不用手写 CozoScript）：
+
+```js
+ast_graph_callers({ name: "greet", limit: 50 })
+ast_graph_chain({ name: "greet", direction: "upstream", max_depth: 3 })
+```
+
+列出指定文件里的顶层符号（进阶：直接写 CozoScript，需要 file_id）：
 
 ```cozo
 ?[file_id] <- [[$file_id]]
@@ -88,6 +108,12 @@ git-ai ai serve
 **3) 文件浏览**
 当你需要找入口文件、配置文件、或按模式定位：
 - `list_files({ pattern: "src/**/*.{ts,tsx,js,jsx}", limit: 500 })`
+
+**4) AST 图谱（结构化问题优先）**
+当你要回答“这个文件里有哪些顶层定义 / 这个类有哪些方法 / 继承结构怎么查”等问题：
+- `ast_graph_find({ prefix: "GitAI", limit: 20 })`
+- `ast_graph_children({ id: "src/mcp/server.ts", as_file: true })`
+- 复杂关系（extends/implements/递归）再退回：`ast_graph_query({ query: "<CozoScript>", params: {...} })`
 
 #### 输出要求
 - 先给结论，再给证据（文件 + 行范围）

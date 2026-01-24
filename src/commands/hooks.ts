@@ -25,9 +25,10 @@ async function ensureHooksExecutable(repoRoot: string): Promise<{ changed: numbe
   if (process.platform === 'win32') return { changed: 0, skipped: true };
   const hooksDir = path.join(repoRoot, '.githooks');
   if (!await fs.pathExists(hooksDir)) return { changed: 0, skipped: false };
-  const names = await fs.readdir(hooksDir);
+  const names = new Set(await fs.readdir(hooksDir));
+  const targets = ['pre-commit', 'pre-push', 'post-checkout', 'post-merge'].filter(n => names.has(n));
   let changed = 0;
-  for (const n of names) {
+  for (const n of targets) {
     const p = path.join(hooksDir, n);
     const stat = await fs.stat(p);
     if (!stat.isFile()) continue;

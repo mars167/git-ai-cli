@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import path from 'path';
 import { inferScanRoot, resolveGitRoot } from '../core/git';
 import { IndexerV2 } from '../core/indexer';
+import { createLogger } from '../core/log';
 
 export const indexCommand = new Command('index')
   .description('Build LanceDB+SQ8 index for the current repository (HEAD working tree)')
@@ -9,6 +10,8 @@ export const indexCommand = new Command('index')
   .option('-d, --dim <dim>', 'Embedding dimension', '256')
   .option('--overwrite', 'Overwrite existing tables', false)
   .action(async (options) => {
+    const log = createLogger({ component: 'cli', cmd: 'ai index' });
+    const startedAt = Date.now();
     try {
       const repoRoot = await resolveGitRoot(path.resolve(options.path));
       const scanRoot = inferScanRoot(repoRoot);
@@ -16,9 +19,10 @@ export const indexCommand = new Command('index')
       const overwrite = Boolean(options.overwrite);
       const indexer = new IndexerV2({ repoRoot, scanRoot, dim, overwrite });
       await indexer.run();
+      log.info('index_repo', { ok: true, repoRoot, scanRoot, dim, overwrite, duration_ms: Date.now() - startedAt });
       console.log(JSON.stringify({ ok: true, repoRoot, scanRoot, dim, overwrite }, null, 2));
     } catch (e) {
-      console.error('Indexing failed:', e);
+      log.error('index_repo', { ok: false, duration_ms: Date.now() - startedAt, err: e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : { message: String(e) } });
       process.exit(1);
     }
   });

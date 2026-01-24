@@ -2,7 +2,7 @@ import Parser from 'tree-sitter';
 import TypeScript from 'tree-sitter-typescript';
 import Java from 'tree-sitter-java';
 import fs from 'fs-extra';
-import { SymbolInfo } from './types';
+import { AstReference, AstRefKind, ParseResult, SymbolInfo } from './types';
 
 export class CodeParser {
   private parser: Parser;
@@ -11,23 +11,23 @@ export class CodeParser {
     this.parser = new Parser();
   }
 
-  async parseFile(filePath: string): Promise<SymbolInfo[]> {
+  async parseFile(filePath: string): Promise<ParseResult> {
     const content = await fs.readFile(filePath, 'utf-8');
     const language = this.pickLanguage(filePath);
-    if (!language) return [];
+    if (!language) return { symbols: [], refs: [] };
 
     this.parser.setLanguage(language.language);
     try {
       const tree = this.parser.parse(content);
-      return this.extractSymbols(tree.rootNode, language.id);
+      return this.extractSymbolsAndRefs(tree.rootNode, language.id);
     } catch (e: any) {
       const msg = String(e?.message ?? e);
-      if (!msg.includes('Invalid argument')) return [];
+      if (!msg.includes('Invalid argument')) return { symbols: [], refs: [] };
       try {
         const tree = this.parser.parse(content, undefined, { bufferSize: 1024 * 1024 });
-        return this.extractSymbols(tree.rootNode, language.id);
+        return this.extractSymbolsAndRefs(tree.rootNode, language.id);
       } catch {
-        return [];
+        return { symbols: [], refs: [] };
       }
     }
   }
@@ -45,8 +45,9 @@ export class CodeParser {
     return null;
   }
 
-  private extractSymbols(node: Parser.SyntaxNode, languageId: 'typescript' | 'java'): SymbolInfo[] {
+  private extractSymbolsAndRefs(node: Parser.SyntaxNode, languageId: 'typescript' | 'java'): ParseResult {
     const symbols: SymbolInfo[] = [];
+    const refs: AstReference[] = [];
 
     const parseHeritage = (head: string): { extends?: string[]; implements?: string[] } => {
       const out: { extends?: string[]; implements?: string[] } = {};
@@ -77,8 +78,54 @@ export class CodeParser {
       return out;
     };
 
+    const pushRef = (name: string, refKind: AstRefKind, n: Parser.SyntaxNode) => {
+      const nm = String(name ?? '').trim();
+      if (!nm) return;
+      refs.push({
+        name: nm,
+        refKind,
+        line: n.startPosition.row + 1,
+        column: n.startPosition.column + 1,
+      });
+    };
+
+    const findFirstByType = (n: Parser.SyntaxNode, types: string[]): Parser.SyntaxNode | null => {
+      if (types.includes(n.type)) return n;
+      for (let i = 0; i < n.childCount; i++) {
+        const c = n.child(i);
+        if (!c) continue;
+        const found = findFirstByType(c, types);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    const extractTsCalleeName = (callee: Parser.SyntaxNode | null): string | null => {
+      if (!callee) return null;
+      if (callee.type === 'identifier') return callee.text;
+      if (callee.type === 'member_expression' || callee.type === 'optional_chain') {
+        const prop = callee.childForFieldName('property');
+        if (prop) return prop.text;
+        const last = callee.namedChild(callee.namedChildCount - 1);
+        if (last) return last.text;
+      }
+      return null;
+    };
+
     const traverse = (n: Parser.SyntaxNode, container?: SymbolInfo) => {
       if (languageId === 'typescript') {
+        if (n.type === 'call_expression') {
+          const fn = n.childForFieldName('function') ?? n.namedChild(0);
+          const callee = extractTsCalleeName(fn);
+          if (callee) pushRef(callee, 'call', fn ?? n);
+        } else if (n.type === 'new_expression') {
+          const ctor = n.childForFieldName('constructor') ?? n.namedChild(0);
+          const callee = extractTsCalleeName(ctor);
+          if (callee) pushRef(callee, 'new', ctor ?? n);
+        } else if (n.type === 'type_identifier') {
+          pushRef(n.text, 'type', n);
+        }
+
         if (n.type === 'function_declaration' || n.type === 'method_definition') {
           const nameNode = n.childForFieldName('name');
           if (nameNode) {
@@ -112,6 +159,14 @@ export class CodeParser {
           }
         }
       } else {
+        if (n.type === 'method_invocation') {
+          const nameNode = n.childForFieldName('name');
+          if (nameNode) pushRef(nameNode.text, 'call', nameNode);
+        } else if (n.type === 'object_creation_expression') {
+          const typeNode = findFirstByType(n, ['type_identifier', 'identifier']);
+          if (typeNode) pushRef(typeNode.text, 'new', typeNode);
+        }
+
         if (n.type === 'method_declaration' || n.type === 'constructor_declaration') {
           const nameNode = n.childForFieldName('name');
           if (nameNode) {
@@ -157,6 +212,6 @@ export class CodeParser {
     };
 
     traverse(node, undefined);
-    return symbols;
+    return { symbols, refs };
   }
 }

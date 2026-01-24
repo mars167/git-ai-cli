@@ -15,6 +15,20 @@ export interface SymbolInfo {
   implements?: string[];
 }
 
+export type AstRefKind = 'call' | 'new' | 'type';
+
+export interface AstReference {
+  name: string;
+  refKind: AstRefKind;
+  line: number;
+  column: number;
+}
+
+export interface ParseResult {
+  symbols: SymbolInfo[];
+  refs: AstReference[];
+}
+
 export interface RefRow {
   ref_id: string;
   content_hash: string;
