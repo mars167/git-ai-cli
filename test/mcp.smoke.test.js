@@ -63,6 +63,9 @@ test('mcp server exposes set_repo and supports path arg', async () => {
   });
   const repoRootReal = await fs.realpath(repoDir);
 
+  // Pre-index the repo since index_repo tool is removed from MCP
+  runOk('node', [CLI, 'ai', 'index', '--dim', '64', '--overwrite'], repoDir);
+
   const transport = new StdioClientTransport({
     command: 'node',
     args: [CLI, 'ai', 'serve'],
@@ -80,7 +83,6 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     assert.ok(toolNames.has('semantic_search'));
     assert.ok(toolNames.has('set_repo'));
     assert.ok(toolNames.has('get_repo'));
-    assert.ok(toolNames.has('index_repo'));
     assert.ok(toolNames.has('check_index'));
     assert.ok(toolNames.has('pack_index'));
     assert.ok(toolNames.has('unpack_index'));
@@ -104,14 +106,6 @@ test('mcp server exposes set_repo and supports path arg', async () => {
 
     {
       const call = await client.callTool({ name: 'get_repo', arguments: {} });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.equal(parsed.ok, true);
-      assert.equal(await fs.realpath(parsed.repoRoot), repoRootReal);
-    }
-
-    {
-      const call = await client.callTool({ name: 'index_repo', arguments: { overwrite: true, dim: 64 } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.equal(parsed.ok, true);
