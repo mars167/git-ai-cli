@@ -5,16 +5,23 @@
 [![license](https://img.shields.io/github/license/mars167/git-ai-cli)](./LICENSE)
 [![npm (github packages)](https://img.shields.io/npm/v/%40mars167%2Fgit-ai?registry_uri=https%3A%2F%2Fnpm.pkg.github.com)](https://github.com/mars167/git-ai-cli/packages)
 
-`git-ai` 是一个全局命令行工具：默认行为与 `git` 保持一致（代理系统 git），同时提供 `ai` 子命令用于代码索引与检索能力。
+[🇨🇳 简体中文](./README.zh-CN.md) | **English**
 
-## 支持语言
+`git-ai` is a global command-line tool: it defaults to behaving like `git` (proxying system git), while providing an `ai` subcommand for code indexing and retrieval capabilities.
 
-当前索引/符号提取支持以下语言与文件后缀：
-- JavaScript：`.js`、`.jsx`
-- TypeScript：`.ts`、`.tsx`
-- Java：`.java`
+## Supported Languages
 
-## 安装
+Current indexing/symbol extraction supports the following languages and file extensions:
+- JavaScript: `.js`, `.jsx`
+- TypeScript: `.ts`, `.tsx`
+- Java: `.java`
+- C: `.c`, `.h`
+- Go: `.go`
+- Python: `.py`
+- PHP: `.php`
+- Rust: `.rs`
+
+## Installation
 
 ```bash
 npm i -g git-ai
@@ -22,16 +29,16 @@ npm i -g git-ai
 yarn global add git-ai
 ```
 
-## 文档
-- 开发指引：[DEVELOPMENT.md](./DEVELOPMENT.md)
-- 文档中心（使用/概念/排障）：[docs/README.md](./docs/README.md)
-- 设计说明：[docs/design.md](./docs/design.md)
-- 技术原理详解（小白向）：[docs/architecture_explained.md](./docs/architecture_explained.md)
-- Agent 集成（Skills/Rules）：[docs/mcp.md](./docs/mcp.md)
+## Documentation
+- Development Guide: [DEVELOPMENT.md](./DEVELOPMENT.md)
+- Documentation Center (Usage/Concepts/Troubleshooting): [docs/README.md](./docs/README.md)
+- Design: [docs/design.md](./docs/zh-CN/design.md) (Chinese)
+- Architecture Explained: [docs/architecture_explained.md](./docs/zh-CN/architecture_explained.md) (Chinese)
+- Agent Integration (Skills/Rules): [docs/mcp.md](./docs/zh-CN/mcp.md) (Chinese)
 
-## 基本用法（与 git 类似）
+## Basic Usage (Like Git)
 
-`git-ai` 会把大多数命令直接转发给 `git`：
+`git-ai` forwards most commands directly to `git`:
 
 ```bash
 git-ai init
@@ -41,9 +48,9 @@ git-ai commit -m "msg"
 git-ai push -u origin main
 ```
 
-## AI 能力
+## AI Capabilities
 
-所有 AI 相关能力放在 `git-ai ai` 下：
+All AI-related capabilities are under `git-ai ai`:
 
 ```bash
 git-ai ai index --overwrite
@@ -55,29 +62,29 @@ git-ai ai unpack
 git-ai ai serve
 ```
 
-## MCP Server（stdio）
+## MCP Server (stdio)
 
-`git-ai` 提供一个基于 MCP 的 stdio Server，供 Agent/客户端以工具方式调用：
-- `search_symbols`：符号检索（substring/prefix/wildcard/regex/fuzzy）
-- `semantic_search`：基于 LanceDB + SQ8 的语义检索
-- `ast_graph_query`：基于 CozoDB 的 AST 图查询（CozoScript）
+`git-ai` provides an MCP-based stdio Server for Agents/Clients to call as tools:
+- `search_symbols`: Symbol retrieval (substring/prefix/wildcard/regex/fuzzy)
+- `semantic_search`: Semantic retrieval based on LanceDB + SQ8
+- `ast_graph_query`: AST graph query based on CozoDB (CozoScript)
 
-### 启动
+### Startup
 
-建议先在目标仓库生成索引：
+It is recommended to generate the index in the target repository first:
 
 ```bash
 git-ai ai index --overwrite
 ```
 
-然后启动 MCP Server（会在 stdio 上等待客户端连接，这是正常的）：
+Then start the MCP Server (it will wait for client connections on stdio, which is normal):
 
 ```bash
 cd /ABS/PATH/TO/REPO
 git-ai ai serve
 ```
 
-### Claude Desktop 配置示例
+### Claude Desktop Configuration Example
 
 ```json
 {
@@ -90,39 +97,39 @@ git-ai ai serve
 }
 ```
 
-说明：
-- `git-ai ai serve` 默认使用当前目录作为仓库定位起点（类似 git 的用法）。
-- 若宿主无法保证 MCP 进程的工作目录（cwd）指向仓库目录，推荐由 Agent 在首次调用前先执行一次 `set_repo({path: \"/ABS/PATH/TO/REPO\"})`，或在每次 tool 调用里传 `path` 参数。
+Note:
+- `git-ai ai serve` defaults to using the current directory as the repository location (similar to git usage).
+- If the host cannot guarantee that the MCP process working directory (cwd) points to the repository directory, it is recommended that the Agent execute `set_repo({path: \"/ABS/PATH/TO/REPO\"})` before the first call, or pass the `path` parameter in every tool call.
 
-## Agent Skills / Rules（Trae）
+## Agent Skills / Rules (Trae)
 
-本仓库提供了 Agent 可直接复用的 Skill/Rule 模版：
-- Skill： [./.trae/skills/git-ai-mcp/SKILL.md](./.trae/skills/git-ai-mcp/SKILL.md)
-- Rule： [./.trae/rules/git-ai-mcp/RULE.md](./.trae/rules/git-ai-mcp/RULE.md)
+This repository provides reusable Skill/Rule templates for Agents:
+- Skill: [./.trae/skills/git-ai-mcp/SKILL.md](./.trae/skills/git-ai-mcp/SKILL.md)
+- Rule: [./.trae/rules/git-ai-mcp/RULE.md](./.trae/rules/git-ai-mcp/RULE.md)
 
-使用方式：
-- 在 Trae 中打开本仓库后，Agent 会自动加载 `.trae/skills/**` 下的 Skill。
-- 需要给 Agent 加约束时，把 Rule 内容放到你的 Agent 配置/系统规则中（也可以直接引用本仓库的 `.trae/rules/**` 作为规范来源）。
+Usage:
+- After opening this repository in Trae, the Agent will automatically load Skills under `.trae/skills/**`.
+- When you need to add constraints to the Agent, put the Rule content into your Agent configuration/system rules (or directly reference `.trae/rules/**` in this repository as a source).
 
-## Git hooks（提交前重建索引，push 前打包校验，checkout 自动解包）
+## Git hooks (Rebuild index before commit, verify pack before push, auto unpack on checkout)
 
-在任意 git 仓库中安装 hooks：
+Install hooks in any git repository:
 
 ```bash
 git-ai ai hooks install
 git-ai ai hooks status
 ```
 
-说明：
-- `pre-commit`：自动 `index --overwrite` + `pack`，并把 `.git-ai/meta.json` 与 `.git-ai/lancedb.tar.gz` 加入暂存区。
-- `pre-push`：再次 `pack`，若归档发生变化则阻止 push，提示先提交归档文件。
-- `post-checkout` / `post-merge`：若存在 `.git-ai/lancedb.tar.gz` 则自动 `unpack`。
+Explanation:
+- `pre-commit`: Automatically `index --overwrite` + `pack`, and add `.git-ai/meta.json` and `.git-ai/lancedb.tar.gz` to the staging area.
+- `pre-push`: `pack` again, if the archive changes, block the push and prompt to submit the archive file first.
+- `post-checkout` / `post-merge`: If `.git-ai/lancedb.tar.gz` exists, automatically `unpack`.
 
-## Git LFS（推荐，用于 .git-ai/lancedb.tar.gz）
+## Git LFS (Recommended for .git-ai/lancedb.tar.gz)
 
-为了避免把较大的索引归档直接存进 Git 历史，推荐对 `.git-ai/lancedb.tar.gz` 启用 Git LFS。
+To avoid storing large index archives directly in Git history, it is recommended to enable Git LFS for `.git-ai/lancedb.tar.gz`.
 
-### 开启（一次性）
+### Enable (One-time)
 
 ```bash
 git lfs install
@@ -131,14 +138,14 @@ git add .gitattributes
 git commit -m "chore: track lancedb archive via git-lfs"
 ```
 
-也可以用 `git-ai` 触发（仅在已安装 git-lfs 的情况下生效）：
+Can also be triggered with `git-ai` (only works if git-lfs is installed):
 
 ```bash
 git-ai ai pack --lfs
 ```
 
-### 克隆/切分支后（如果未自动拉取 LFS）
-如果你环境设置了 `GIT_LFS_SKIP_SMUDGE=1`，或发现 `.git-ai/lancedb.tar.gz` 不是有效的 gzip 文件：
+### After Clone/Checkout (If LFS pull is not automatic)
+If your environment has `GIT_LFS_SKIP_SMUDGE=1` set, or you find `.git-ai/lancedb.tar.gz` is not a valid gzip file:
 
 ```bash
 git lfs pull
