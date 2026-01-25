@@ -33,13 +33,25 @@ export class CodeParser {
     const adapter = this.pickAdapter(filePath);
     if (!adapter) return { symbols: [], refs: [] };
 
-    this.parser.setLanguage(adapter.getTreeSitterLanguage());
     try {
+      this.parser.setLanguage(adapter.getTreeSitterLanguage());
       const tree = this.parser.parse(content);
       return adapter.extractSymbolsAndRefs(tree.rootNode);
     } catch (e: any) {
       const msg = String(e?.message ?? e);
-      if (!msg.includes('Invalid argument')) return { symbols: [], refs: [] };
+      // Fallback for large files or other parsing errors
+      if (!msg.includes('Invalid argument') && !msg.includes('Invalid language object')) {
+          // If it's just a parse error that might be fixed by buffer size, try again
+          // But if setLanguage failed, we can't do anything.
+          // Actually if setLanguage failed, this.parser might be in invalid state? 
+          // It's safer to return empty.
+      }
+      
+      if (msg.includes('Invalid language object')) {
+          console.warn(`Failed to set language for ${filePath}: ${msg}`);
+          return { symbols: [], refs: [] };
+      }
+
       try {
         const tree = this.parser.parse(content, undefined, { bufferSize: 1024 * 1024 });
         return adapter.extractSymbolsAndRefs(tree.rootNode);

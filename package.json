@@ -53,7 +53,7 @@
     "tree-sitter-php": "^0.20.0",
     "tree-sitter-python": "^0.21.0",
     "tree-sitter-rust": "^0.21.0",
-    "tree-sitter-typescript": "^0.23.2",
+    "tree-sitter-typescript": "^0.21.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "zod": "^4.3.5"

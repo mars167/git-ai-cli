@@ -1,3 +1,4 @@
+/// <reference path="../../modules.d.ts" />
 import Parser from 'tree-sitter';
 import PHP from 'tree-sitter-php';
 import { LanguageAdapter } from './adapter';

@@ -17,8 +17,8 @@ export interface IndexOptions {
   overwrite: boolean;
 }
 
-async function loadAiIgnorePatterns(repoRoot: string): Promise<string[]> {
-  const ignorePath = path.join(repoRoot, '.aiignore');
+async function loadIgnorePatterns(repoRoot: string, fileName: string): Promise<string[]> {
+  const ignorePath = path.join(repoRoot, fileName);
   if (!await fs.pathExists(ignorePath)) return [];
   const raw = await fs.readFile(ignorePath, 'utf-8');
   return raw
@@ -33,7 +33,13 @@ function buildChunkText(file: string, symbol: { name: string; kind: string; sign
 }
 
 function inferIndexLang(file: string): IndexLang {
-  return file.endsWith('.java') ? 'java' : 'ts';
+  if (file.endsWith('.java')) return 'java';
+  if (file.endsWith('.c') || file.endsWith('.h')) return 'c';
+  if (file.endsWith('.go')) return 'go';
+  if (file.endsWith('.py')) return 'python';
+  if (file.endsWith('.php')) return 'php';
+  if (file.endsWith('.rs')) return 'rust';
+  return 'ts';
 }
 
 export class IndexerV2 {
@@ -56,11 +62,14 @@ export class IndexerV2 {
     await fs.ensureDir(gitAiDir);
     const dbDir = defaultDbDir(this.repoRoot);
 
-    const aiIgnore = await loadAiIgnorePatterns(this.repoRoot);
-    const files = await glob('**/*.{ts,tsx,js,jsx,java}', {
+    const aiIgnore = await loadIgnorePatterns(this.repoRoot, '.aiignore');
+    const gitIgnore = await loadIgnorePatterns(this.repoRoot, '.gitignore');
+    const files = await glob('**/*.{ts,tsx,js,jsx,java,c,h,go,py,php,rs}', {
       cwd: this.scanRoot,
+      nodir: true,
       ignore: [
         'node_modules/**',
+        '**/node_modules/**',
         '.git/**',
         '**/.git/**',
         '.git-ai/**',
@@ -75,6 +84,7 @@ export class IndexerV2 {
         '.gradle/**',
         '**/.gradle/**',
         ...aiIgnore,
+        ...gitIgnore,
       ],
     });
 
@@ -111,13 +121,26 @@ export class IndexerV2 {
     const astRefsName: Array<[string, string, string, string, string, number, number]> = [];
     const astCallsName: Array<[string, string, string, string, number, number]> = [];
 
+    let processedCount = 0;
+    const totalFiles = files.length;
+    console.log(`Found ${totalFiles} files to index.`);
+
     for (const file of files) {
+      processedCount++;
+      if (processedCount % 100 === 0) {
+        console.log(`[${processedCount}/${totalFiles}] Indexing ${file}...`);
+      }
       const fullPath = path.join(this.scanRoot, file);
       const filePosix = toPosixPath(file);
       const lang = inferIndexLang(filePosix);
       if (!chunkRowsByLang[lang]) chunkRowsByLang[lang] = [];
       if (!refRowsByLang[lang]) refRowsByLang[lang] = [];
       if (!existingChunkIdsByLang[lang]) existingChunkIdsByLang[lang] = new Set<string>();
+
+      // Double check it's a file to avoid EISDIR if glob still leaks something
+      const stat = await fs.stat(fullPath);
+      if (!stat.isFile()) continue;
+
       const parsed = await this.parser.parseFile(fullPath);
       const symbols = parsed.symbols;
       const fileRefs = parsed.refs;
