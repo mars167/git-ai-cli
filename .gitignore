@@ -9,3 +9,5 @@ dist/
 .git-ai/ast-graph.export.json
 .git-ai/._*
 .tmp-hook-test/
+.vscode/
+.trae/documents/

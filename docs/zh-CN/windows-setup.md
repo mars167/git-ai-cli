@@ -2,7 +2,7 @@
 
 **简体中文** | [English](../windows-setup.md)
 
-本指引介绍如何在 Windows 上设置 `git-ai` 的开发环境，特别是针对多语言支持（C、Go、Python、PHP、Rust）。
+本指引介绍如何在 Windows 上设置 `git-ai` 的开发环境，特别是针对多语言支持（C、Go、Python、Rust）。
 
 ## 前置条件
 
@@ -59,7 +59,6 @@ npx ts-node test/verify_parsing.ts
 *   **C**: 安装 MinGW 或使用 MSVC (cl.exe)。
 *   **Go**: 从 [go.dev](https://go.dev/dl/) 安装。
 *   **Python**: [python.org](https://www.python.org/)。
-*   **PHP**: 从 [windows.php.net](https://windows.php.net/download/) 下载。添加到 PATH。
 *   **Rust**: 通过 [rustup.rs](https://rustup.rs/) 安装。
 
 ## 排障

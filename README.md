@@ -18,7 +18,6 @@ Current indexing/symbol extraction supports the following languages and file ext
 - C: `.c`, `.h`
 - Go: `.go`
 - Python: `.py`
-- PHP: `.php`
 - Rust: `.rs`
 
 ## Installation
@@ -53,6 +52,7 @@ git-ai push -u origin main
 All AI-related capabilities are under `git-ai ai`:
 
 ```bash
+git-ai ai status
 git-ai ai index --overwrite
 git-ai ai query Indexer --limit 10
 git-ai ai semantic "semantic search" --topk 5

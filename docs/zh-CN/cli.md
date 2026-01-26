@@ -13,6 +13,7 @@ git-ai push -u origin main
 ## AI 子命令
 
 ```bash
+git-ai ai status
 git-ai ai index --overwrite
 git-ai ai query "search text" --limit 20
 git-ai ai query "get*repo" --mode wildcard --case-insensitive --limit 20
@@ -25,6 +26,11 @@ git-ai ai unpack
 git-ai ai hooks install
 git-ai ai serve
 ```
+
+说明：
+- 除 `ai status` 默认输出为人类可读文本外，其余命令输出均为 JSON（便于 Agent/脚本解析）。
+- `ai status --json` 可输出机器可读 JSON。
+- `ai index` 的进度条输出到 stderr，stdout 保持为 JSON（避免破坏管道解析）。
 
 ## RepoMap（全局鸟瞰，可选）
 

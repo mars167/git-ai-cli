@@ -3,9 +3,9 @@ import { Field, Float32, Int32, Schema, Utf8 } from 'apache-arrow';
 import fs from 'fs-extra';
 import path from 'path';
 
-export type IndexLang = 'java' | 'ts' | 'c' | 'go' | 'python' | 'php' | 'rust';
+export type IndexLang = 'java' | 'ts' | 'c' | 'go' | 'python' | 'rust';
 
-export const ALL_INDEX_LANGS: IndexLang[] = ['java', 'ts', 'c', 'go', 'python', 'php', 'rust'];
+export const ALL_INDEX_LANGS: IndexLang[] = ['java', 'ts', 'c', 'go', 'python', 'rust'];
 
 export interface LanceTables {
   db: lancedb.Connection;

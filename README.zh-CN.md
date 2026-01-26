@@ -18,7 +18,6 @@
 - C: `.c`, `.h`
 - Go: `.go`
 - Python: `.py`
-- PHP: `.php`
 - Rust: `.rs`
 
 ## 安装
@@ -53,6 +52,7 @@ git-ai push -u origin main
 所有 AI 相关能力放在 `git-ai ai` 下：
 
 ```bash
+git-ai ai status
 git-ai ai index --overwrite
 git-ai ai query Indexer --limit 10
 git-ai ai semantic "semantic search" --topk 5

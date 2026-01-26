@@ -7,7 +7,6 @@ import { JavaAdapter } from './parser/java';
 import { CAdapter } from './parser/c';
 import { GoAdapter } from './parser/go';
 import { PythonAdapter } from './parser/python';
-import { PHPAdapter } from './parser/php';
 import { RustAdapter } from './parser/rust';
 
 export class CodeParser {
@@ -23,7 +22,6 @@ export class CodeParser {
       new CAdapter(),
       new GoAdapter(),
       new PythonAdapter(),
-      new PHPAdapter(),
       new RustAdapter(),
     ];
   }
@@ -39,18 +37,8 @@ export class CodeParser {
       return adapter.extractSymbolsAndRefs(tree.rootNode);
     } catch (e: any) {
       const msg = String(e?.message ?? e);
-      // Fallback for large files or other parsing errors
-      if (!msg.includes('Invalid argument') && !msg.includes('Invalid language object')) {
-          // If it's just a parse error that might be fixed by buffer size, try again
-          // But if setLanguage failed, we can't do anything.
-          // Actually if setLanguage failed, this.parser might be in invalid state? 
-          // It's safer to return empty.
-      }
-      
-      if (msg.includes('Invalid language object')) {
-          console.warn(`Failed to set language for ${filePath}: ${msg}`);
-          return { symbols: [], refs: [] };
-      }
+      if (msg.includes('Invalid language object')) return { symbols: [], refs: [] };
+      if (!msg.includes('Invalid argument')) return { symbols: [], refs: [] };
 
       try {
         const tree = this.parser.parse(content, undefined, { bufferSize: 1024 * 1024 });

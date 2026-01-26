@@ -2,7 +2,7 @@
 
 [简体中文](./zh-CN/windows-setup.md) | **English**
 
-This guide describes how to set up the development environment for `git-ai` on Windows, specifically for the multi-language support (C, Go, Python, PHP, Rust).
+This guide describes how to set up the development environment for `git-ai` on Windows, specifically for the multi-language support (C, Go, Python, Rust).
 
 ## Prerequisites
 
@@ -59,7 +59,6 @@ To fully develop with the polyglot examples, you may need to install the respect
 *   **C**: Install MinGW or use MSVC (cl.exe).
 *   **Go**: Install from [go.dev](https://go.dev/dl/).
 *   **Python**: [python.org](https://www.python.org/).
-*   **PHP**: Download from [windows.php.net](https://windows.php.net/download/). Add to PATH.
 *   **Rust**: Install via [rustup.rs](https://rustup.rs/).
 
 ## Troubleshooting

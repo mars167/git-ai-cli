@@ -98,6 +98,12 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     const stat2 = await fs.stat(path.join(repo, '.git-ai', 'lancedb'));
     assert.ok(stat2.isDirectory());
     runOk('node', [CLI, 'ai', 'check-index'], repo);
+    {
+      const res = runOk('node', [CLI, 'ai', 'status', '--json'], repo);
+      const obj = JSON.parse(res.stdout);
+      assert.equal(obj.ok, true);
+      assert.equal(obj.expected.index_schema_version, 3);
+    }
 
     runOk('node', [CLI, 'ai', 'hooks', 'install'], repo);
     const hooksPath = runOk('git', ['config', '--get', 'core.hooksPath'], repo).stdout.trim();

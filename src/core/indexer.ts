@@ -15,6 +15,7 @@ export interface IndexOptions {
   scanRoot?: string;
   dim: number;
   overwrite: boolean;
+  onProgress?: (p: { totalFiles: number; processedFiles: number; currentFile?: string }) => void;
 }
 
 async function loadIgnorePatterns(repoRoot: string, fileName: string): Promise<string[]> {
@@ -24,8 +25,15 @@ async function loadIgnorePatterns(repoRoot: string, fileName: string): Promise<s
   return raw
     .split('\n')
     .map(l => l.trim())
-    .filter(l => l.length > 0)
-    .filter(l => !l.startsWith('#'));
+    .map((l) => {
+      if (l.length === 0) return null;
+      if (l.startsWith('#')) return null;
+      if (l.startsWith('!')) return null;
+      const withoutLeadingSlash = l.startsWith('/') ? l.slice(1) : l;
+      if (withoutLeadingSlash.endsWith('/')) return `${withoutLeadingSlash}**`;
+      return withoutLeadingSlash;
+    })
+    .filter((l): l is string => Boolean(l));
 }
 
 function buildChunkText(file: string, symbol: { name: string; kind: string; signature: string }): string {
@@ -37,7 +45,6 @@ function inferIndexLang(file: string): IndexLang {
   if (file.endsWith('.c') || file.endsWith('.h')) return 'c';
   if (file.endsWith('.go')) return 'go';
   if (file.endsWith('.py')) return 'python';
-  if (file.endsWith('.php')) return 'php';
   if (file.endsWith('.rs')) return 'rust';
   return 'ts';
 }
@@ -48,12 +55,14 @@ export class IndexerV2 {
   private parser: CodeParser;
   private dim: number;
   private overwrite: boolean;
+  private onProgress?: IndexOptions['onProgress'];
 
   constructor(options: IndexOptions) {
     this.repoRoot = path.resolve(options.repoRoot);
     this.scanRoot = path.resolve(options.scanRoot ?? options.repoRoot);
     this.dim = options.dim;
     this.overwrite = options.overwrite;
+    this.onProgress = options.onProgress;
     this.parser = new CodeParser();
   }
 
@@ -64,7 +73,7 @@ export class IndexerV2 {
 
     const aiIgnore = await loadIgnorePatterns(this.repoRoot, '.aiignore');
     const gitIgnore = await loadIgnorePatterns(this.repoRoot, '.gitignore');
-    const files = await glob('**/*.{ts,tsx,js,jsx,java,c,h,go,py,php,rs}', {
+    const files = await glob('**/*.{ts,tsx,js,jsx,java,c,h,go,py,rs}', {
       cwd: this.scanRoot,
       nodir: true,
       ignore: [
@@ -121,23 +130,20 @@ export class IndexerV2 {
     const astRefsName: Array<[string, string, string, string, string, number, number]> = [];
     const astCallsName: Array<[string, string, string, string, number, number]> = [];
 
-    let processedCount = 0;
     const totalFiles = files.length;
-    console.log(`Found ${totalFiles} files to index.`);
+    this.onProgress?.({ totalFiles, processedFiles: 0 });
 
+    let processedFiles = 0;
     for (const file of files) {
-      processedCount++;
-      if (processedCount % 100 === 0) {
-        console.log(`[${processedCount}/${totalFiles}] Indexing ${file}...`);
-      }
+      processedFiles++;
       const fullPath = path.join(this.scanRoot, file);
       const filePosix = toPosixPath(file);
+      this.onProgress?.({ totalFiles, processedFiles, currentFile: filePosix });
       const lang = inferIndexLang(filePosix);
       if (!chunkRowsByLang[lang]) chunkRowsByLang[lang] = [];
       if (!refRowsByLang[lang]) refRowsByLang[lang] = [];
       if (!existingChunkIdsByLang[lang]) existingChunkIdsByLang[lang] = new Set<string>();
 
-      // Double check it's a file to avoid EISDIR if glob still leaks something
       const stat = await fs.stat(fullPath);
       if (!stat.isFile()) continue;
 

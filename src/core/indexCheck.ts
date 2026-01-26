@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import * as lancedb from '@lancedb/lancedb';
-import { IndexLang } from './lancedb';
+import { ALL_INDEX_LANGS, IndexLang } from './lancedb';
 
 export const EXPECTED_INDEX_SCHEMA_VERSION = 3;
 
@@ -39,11 +39,15 @@ function requiredTablesForLang(lang: IndexLang): string[] {
 }
 
 export function resolveLangs(meta: IndexMetaV21 | null, selector: LangSelector): IndexLang[] {
-  const available = Array.isArray(meta?.languages) && meta!.languages.length > 0 ? meta!.languages : (['java', 'ts'] as IndexLang[]);
+  const raw = Array.isArray((meta as any)?.languages) ? (meta as any).languages.map((v: any) => String(v)) : [];
+  const filtered = raw.filter((l: string): l is IndexLang => (ALL_INDEX_LANGS as readonly string[]).includes(l));
+  const available = filtered.length > 0 ? filtered : (['java', 'ts'] as IndexLang[]);
   if (selector === 'all') return available;
-  if (selector === 'java' || selector === 'ts') return available.includes(selector) ? [selector] : [];
-  if (available.includes('java')) return ['java'];
-  if (available.includes('ts')) return ['ts'];
+  if (selector !== 'auto') return available.includes(selector) ? [selector] : [];
+  const preferred: IndexLang[] = ['java', 'ts', 'python', 'go', 'rust', 'c'];
+  for (const lang of preferred) {
+    if (available.includes(lang)) return [lang];
+  }
   return available.slice(0, 1);
 }
 
@@ -77,7 +81,8 @@ export async function checkIndex(repoRoot: string): Promise<IndexCheckResult> {
   if (!astGraphDbExists) problems.push('missing_ast_graph_db');
 
   if (meta && lancedbTables) {
-    const langs = Array.isArray(meta.languages) && meta.languages.length > 0 ? meta.languages : [];
+    const raw = Array.isArray((meta as any).languages) ? (meta as any).languages.map((v: any) => String(v)) : [];
+    const langs = raw.filter((l: string): l is IndexLang => (ALL_INDEX_LANGS as readonly string[]).includes(l));
     const expectedTables = langs.flatMap(requiredTablesForLang);
     for (const t of expectedTables) {
       if (!lancedbTables.includes(t)) problems.push(`missing_lancedb_table(${t})`);
@@ -100,4 +105,3 @@ export async function checkIndex(repoRoot: string): Promise<IndexCheckResult> {
     hint: ok ? 'ok' : 'Rebuild index: git-ai ai index --overwrite',
   };
 }
-
