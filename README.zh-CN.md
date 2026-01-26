@@ -115,9 +115,9 @@ git-ai ai serve
 
 ```bash
 cd /path/to/your-repo
-git-ai ai trae install
-git-ai ai trae install --overwrite
-git-ai ai trae install --to /custom/location/.trae
+git-ai ai agent install
+git-ai ai agent install --overwrite
+git-ai ai agent install --to /custom/location/.trae
 ```
 
 ## Git hooks（提交前重建索引，push 前打包校验，checkout 自动解包）

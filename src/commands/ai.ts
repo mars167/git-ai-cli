@@ -9,7 +9,7 @@ import { hooksCommand } from './hooks';
 import { graphCommand } from './graph';
 import { checkIndexCommand } from './checkIndex';
 import { statusCommand } from './status';
-import { traeCommand } from './trae';
+import { agentCommand } from './trae';
 
 export const aiCommand = new Command('ai')
   .description('AI features (indexing, search, hooks, MCP)')
@@ -21,6 +21,6 @@ export const aiCommand = new Command('ai')
   .addCommand(graphCommand)
   .addCommand(packCommand)
   .addCommand(unpackCommand)
-  .addCommand(traeCommand)
+  .addCommand(agentCommand)
   .addCommand(hooksCommand)
   .addCommand(serveCommand);

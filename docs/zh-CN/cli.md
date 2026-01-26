@@ -23,7 +23,7 @@ git-ai ai graph children src/mcp/server.ts --as-file
 git-ai ai graph query "?[name, kind] := *ast_symbol{ref_id, file, name, kind, signature, start_line, end_line}" --params "{}"
 git-ai ai pack
 git-ai ai unpack
-git-ai ai trae install
+git-ai ai agent install
 git-ai ai hooks install
 git-ai ai serve
 ```
@@ -39,9 +39,9 @@ git-ai ai serve
 
 ```bash
 cd /path/to/your-repo
-git-ai ai trae install
-git-ai ai trae install --overwrite
-git-ai ai trae install --to /custom/location/.trae
+git-ai ai agent install
+git-ai ai agent install --overwrite
+git-ai ai agent install --to /custom/location/.trae
 ```
 
 ## RepoMap（全局鸟瞰，可选）

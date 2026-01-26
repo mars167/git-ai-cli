@@ -30,8 +30,9 @@ async function listDirNames(p: string): Promise<string[]> {
   return out.sort();
 }
 
-export const traeCommand = new Command('trae')
-  .description('Install Trae Agent skills/rules templates into a target directory')
+export const agentCommand = new Command('agent')
+  .description('Install Agent skills/rules templates into a target directory')
+  .alias('trae')
   .addCommand(
     new Command('install')
       .description('Install skills/rules templates (default: <repoRoot>/.trae)')

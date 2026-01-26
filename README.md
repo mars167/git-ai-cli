@@ -115,9 +115,9 @@ One-click install into another repository:
 
 ```bash
 cd /path/to/your-repo
-git-ai ai trae install
-git-ai ai trae install --overwrite
-git-ai ai trae install --to /custom/location/.trae
+git-ai ai agent install
+git-ai ai agent install --overwrite
+git-ai ai agent install --to /custom/location/.trae
 ```
 
 ## Git hooks (Rebuild index before commit, verify pack before push, auto unpack on checkout)
