@@ -32,7 +32,7 @@ export class GitAIV2MCPServer {
     this.startDir = path.resolve(startDir);
     this.options = options;
     this.server = new Server(
-      { name: 'git-ai-v2', version: '1.1.1' },
+      { name: 'git-ai-v2', version: '1.1.2' },
       { capabilities: { tools: {} } }
     );
     this.setupHandlers();
