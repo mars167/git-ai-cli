@@ -111,6 +111,15 @@ Usage:
 - After opening this repository in Trae, the Agent will automatically load Skills under `.trae/skills/**`.
 - When you need to add constraints to the Agent, put the Rule content into your Agent configuration/system rules (or directly reference `.trae/rules/**` in this repository as a source).
 
+One-click install into another repository:
+
+```bash
+cd /path/to/your-repo
+git-ai ai trae install
+git-ai ai trae install --overwrite
+git-ai ai trae install --to /custom/location/.trae
+```
+
 ## Git hooks (Rebuild index before commit, verify pack before push, auto unpack on checkout)
 
 Install hooks in any git repository:

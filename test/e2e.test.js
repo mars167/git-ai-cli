@@ -83,6 +83,14 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     runOk('node', [CLI, 'ai', 'index', '--overwrite'], repo);
     runOk('node', [CLI, 'ai', 'pack'], repo);
     runOk('node', [CLI, 'ai', 'pack', '--lfs'], repo);
+    runOk('node', [CLI, 'ai', 'trae', 'install'], repo);
+    assert.ok(runOk('node', [CLI, 'ai', 'trae', 'install', '--overwrite'], repo).status === 0);
+    {
+      const skill = await fs.readFile(path.join(repo, '.trae', 'skills', 'git-ai-mcp', 'SKILL.md'), 'utf-8');
+      const rule = await fs.readFile(path.join(repo, '.trae', 'rules', 'git-ai-mcp', 'RULE.md'), 'utf-8');
+      assert.ok(skill.includes('git-ai-mcp'));
+      assert.ok(rule.includes('git-ai-mcp'));
+    }
     runOk('git', ['add', '.git-ai/meta.json', '.git-ai/lancedb.tar.gz'], repo);
     runOk('git', ['commit', '-m', 'add git-ai index'], repo);
 

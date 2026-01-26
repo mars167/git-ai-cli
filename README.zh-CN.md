@@ -111,6 +111,15 @@ git-ai ai serve
 - 在 Trae 中打开本仓库后，Agent 会自动加载 `.trae/skills/**` 下的 Skill。
 - 需要给 Agent 加约束时，把 Rule 内容放到你的 Agent 配置/系统规则中（也可以直接引用本仓库的 `.trae/rules/**` 作为规范来源）。
 
+一键安装到其它仓库：
+
+```bash
+cd /path/to/your-repo
+git-ai ai trae install
+git-ai ai trae install --overwrite
+git-ai ai trae install --to /custom/location/.trae
+```
+
 ## Git hooks（提交前重建索引，push 前打包校验，checkout 自动解包）
 
 在任意 git 仓库中安装 hooks：

@@ -23,6 +23,7 @@ git-ai ai graph children src/mcp/server.ts --as-file
 git-ai ai graph query "?[name, kind] := *ast_symbol{ref_id, file, name, kind, signature, start_line, end_line}" --params "{}"
 git-ai ai pack
 git-ai ai unpack
+git-ai ai trae install
 git-ai ai hooks install
 git-ai ai serve
 ```
@@ -31,6 +32,17 @@ git-ai ai serve
 - 除 `ai status` 默认输出为人类可读文本外，其余命令输出均为 JSON（便于 Agent/脚本解析）。
 - `ai status --json` 可输出机器可读 JSON。
 - `ai index` 的进度条输出到 stderr，stdout 保持为 JSON（避免破坏管道解析）。
+
+## Trae 一键安装（skills/rules）
+
+将本仓库内置的 Trae Agent 模板（skills/rules）复制到目标仓库的 `.trae/` 目录，便于在 Trae 中直接加载。
+
+```bash
+cd /path/to/your-repo
+git-ai ai trae install
+git-ai ai trae install --overwrite
+git-ai ai trae install --to /custom/location/.trae
+```
 
 ## RepoMap（全局鸟瞰，可选）
 
