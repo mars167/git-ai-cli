@@ -81,6 +81,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
 
     assert.ok(toolNames.has('search_symbols'));
     assert.ok(toolNames.has('semantic_search'));
+    assert.ok(toolNames.has('repo_map'));
     assert.ok(toolNames.has('set_repo'));
     assert.ok(toolNames.has('get_repo'));
     assert.ok(toolNames.has('check_index'));
@@ -137,11 +138,40 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
+      const call = await client.callTool({
+        name: 'search_symbols',
+        arguments: {
+          query: 'hello',
+          mode: 'substring',
+          case_insensitive: true,
+          limit: 10,
+          with_repo_map: true,
+          repo_map_max_files: 5,
+          repo_map_max_symbols: 2,
+        },
+      });
+      const text = String(call?.content?.[0]?.text ?? '');
+      const parsed = text ? JSON.parse(text) : null;
+      assert.ok(parsed && parsed.repo_map && parsed.repo_map.enabled === true);
+      assert.ok(Array.isArray(parsed.repo_map.files));
+      assert.ok(parsed.repo_map.files.length > 0);
+    }
+
+    {
       const call = await client.callTool({ name: 'semantic_search', arguments: { query: 'hello world', topk: 3 } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && Array.isArray(parsed.rows));
       assert.ok(parsed.rows.length > 0);
+    }
+
+    {
+      const call = await client.callTool({ name: 'repo_map', arguments: { max_files: 5, max_symbols: 2 } });
+      const text = String(call?.content?.[0]?.text ?? '');
+      const parsed = text ? JSON.parse(text) : null;
+      assert.ok(parsed && parsed.repo_map && parsed.repo_map.enabled === true);
+      assert.ok(Array.isArray(parsed.repo_map.files));
+      assert.ok(parsed.repo_map.files.length > 0);
     }
 
     {

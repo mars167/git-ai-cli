@@ -8,15 +8,19 @@ import { unpackCommand } from './unpack';
 import { hooksCommand } from './hooks';
 import { graphCommand } from './graph';
 import { checkIndexCommand } from './checkIndex';
+import { statusCommand } from './status';
+import { agentCommand } from './trae';
 
 export const aiCommand = new Command('ai')
   .description('AI features (indexing, search, hooks, MCP)')
   .addCommand(indexCommand)
   .addCommand(checkIndexCommand)
+  .addCommand(statusCommand)
   .addCommand(queryCommand)
   .addCommand(semanticCommand)
   .addCommand(graphCommand)
   .addCommand(packCommand)
   .addCommand(unpackCommand)
+  .addCommand(agentCommand)
   .addCommand(hooksCommand)
   .addCommand(serveCommand);

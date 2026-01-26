@@ -15,17 +15,25 @@ export interface IndexOptions {
   scanRoot?: string;
   dim: number;
   overwrite: boolean;
+  onProgress?: (p: { totalFiles: number; processedFiles: number; currentFile?: string }) => void;
 }
 
-async function loadAiIgnorePatterns(repoRoot: string): Promise<string[]> {
-  const ignorePath = path.join(repoRoot, '.aiignore');
+async function loadIgnorePatterns(repoRoot: string, fileName: string): Promise<string[]> {
+  const ignorePath = path.join(repoRoot, fileName);
   if (!await fs.pathExists(ignorePath)) return [];
   const raw = await fs.readFile(ignorePath, 'utf-8');
   return raw
     .split('\n')
     .map(l => l.trim())
-    .filter(l => l.length > 0)
-    .filter(l => !l.startsWith('#'));
+    .map((l) => {
+      if (l.length === 0) return null;
+      if (l.startsWith('#')) return null;
+      if (l.startsWith('!')) return null;
+      const withoutLeadingSlash = l.startsWith('/') ? l.slice(1) : l;
+      if (withoutLeadingSlash.endsWith('/')) return `${withoutLeadingSlash}**`;
+      return withoutLeadingSlash;
+    })
+    .filter((l): l is string => Boolean(l));
 }
 
 function buildChunkText(file: string, symbol: { name: string; kind: string; signature: string }): string {
@@ -33,7 +41,12 @@ function buildChunkText(file: string, symbol: { name: string; kind: string; sign
 }
 
 function inferIndexLang(file: string): IndexLang {
-  return file.endsWith('.java') ? 'java' : 'ts';
+  if (file.endsWith('.java')) return 'java';
+  if (file.endsWith('.c') || file.endsWith('.h')) return 'c';
+  if (file.endsWith('.go')) return 'go';
+  if (file.endsWith('.py')) return 'python';
+  if (file.endsWith('.rs')) return 'rust';
+  return 'ts';
 }
 
 export class IndexerV2 {
@@ -42,12 +55,14 @@ export class IndexerV2 {
   private parser: CodeParser;
   private dim: number;
   private overwrite: boolean;
+  private onProgress?: IndexOptions['onProgress'];
 
   constructor(options: IndexOptions) {
     this.repoRoot = path.resolve(options.repoRoot);
     this.scanRoot = path.resolve(options.scanRoot ?? options.repoRoot);
     this.dim = options.dim;
     this.overwrite = options.overwrite;
+    this.onProgress = options.onProgress;
     this.parser = new CodeParser();
   }
 
@@ -56,11 +71,14 @@ export class IndexerV2 {
     await fs.ensureDir(gitAiDir);
     const dbDir = defaultDbDir(this.repoRoot);
 
-    const aiIgnore = await loadAiIgnorePatterns(this.repoRoot);
-    const files = await glob('**/*.{ts,tsx,js,jsx,java}', {
+    const aiIgnore = await loadIgnorePatterns(this.repoRoot, '.aiignore');
+    const gitIgnore = await loadIgnorePatterns(this.repoRoot, '.gitignore');
+    const files = await glob('**/*.{ts,tsx,js,jsx,java,c,h,go,py,rs}', {
       cwd: this.scanRoot,
+      nodir: true,
       ignore: [
         'node_modules/**',
+        '**/node_modules/**',
         '.git/**',
         '**/.git/**',
         '.git-ai/**',
@@ -75,6 +93,7 @@ export class IndexerV2 {
         '.gradle/**',
         '**/.gradle/**',
         ...aiIgnore,
+        ...gitIgnore,
       ],
     });
 
@@ -111,13 +130,23 @@ export class IndexerV2 {
     const astRefsName: Array<[string, string, string, string, string, number, number]> = [];
     const astCallsName: Array<[string, string, string, string, number, number]> = [];
 
+    const totalFiles = files.length;
+    this.onProgress?.({ totalFiles, processedFiles: 0 });
+
+    let processedFiles = 0;
     for (const file of files) {
+      processedFiles++;
       const fullPath = path.join(this.scanRoot, file);
       const filePosix = toPosixPath(file);
+      this.onProgress?.({ totalFiles, processedFiles, currentFile: filePosix });
       const lang = inferIndexLang(filePosix);
       if (!chunkRowsByLang[lang]) chunkRowsByLang[lang] = [];
       if (!refRowsByLang[lang]) refRowsByLang[lang] = [];
       if (!existingChunkIdsByLang[lang]) existingChunkIdsByLang[lang] = new Set<string>();
+
+      const stat = await fs.stat(fullPath);
+      if (!stat.isFile()) continue;
+
       const parsed = await this.parser.parseFile(fullPath);
       const symbols = parsed.symbols;
       const fileRefs = parsed.refs;

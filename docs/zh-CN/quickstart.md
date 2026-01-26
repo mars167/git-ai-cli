@@ -10,6 +10,7 @@ npm i -g git-ai
 
 ```bash
 cd /path/to/repo
+git-ai ai status
 git-ai ai index --overwrite
 ```
 
@@ -26,4 +27,3 @@ git-ai ai semantic "where do we open lancedb" --topk 5
 git-ai ai pack
 git-ai ai unpack
 ```
-

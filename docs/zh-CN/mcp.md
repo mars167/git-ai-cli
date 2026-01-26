@@ -19,14 +19,14 @@ git-ai ai serve
 - `set_repo({ path })`：设置默认仓库路径，避免依赖进程工作目录
 
 ### 索引管理
-- `index_repo({ path?, dim?, overwrite? })`：构建/更新索引
 - `check_index({ path? })`：检查索引结构是否与当前版本一致（不一致需重建索引）
 - `pack_index({ path?, lfs? })`：打包索引为 `.git-ai/lancedb.tar.gz`（可选启用 git-lfs track）
 - `unpack_index({ path? })`：解包索引归档
 
 ### 检索
-- `search_symbols({ query, mode?, case_insensitive?, max_candidates?, limit?, lang?, path? })`：符号检索（lang: auto/all/java/ts）
-- `semantic_search({ query, topk?, lang?, path? })`：基于 LanceDB + SQ8 的语义检索（lang: auto/all/java/ts）
+- `search_symbols({ query, mode?, case_insensitive?, max_candidates?, limit?, lang?, path?, with_repo_map?, repo_map_max_files?, repo_map_max_symbols?, wiki_dir? })`：符号检索（lang: auto/all/java/ts；可选附带 repo_map）
+- `semantic_search({ query, topk?, lang?, path?, with_repo_map?, repo_map_max_files?, repo_map_max_symbols?, wiki_dir? })`：基于 LanceDB + SQ8 的语义检索（lang: auto/all/java/ts；可选附带 repo_map）
+- `repo_map({ path?, max_files?, max_symbols?, wiki_dir? })`：生成 repo map（重要文件/符号排名、引导 Wiki 阅读）
 - `ast_graph_find({ prefix, limit?, lang?, path? })`：按名字前缀查找符号定义（大小写不敏感；lang: auto/all/java/ts）
 - `ast_graph_children({ id, as_file?, path? })`：列出包含关系的直接子节点（文件→顶层符号、类→方法等）
 - `ast_graph_refs({ name, limit?, lang?, path? })`：按名字查引用位置（call/new/type；lang: auto/all/java/ts）
@@ -67,6 +67,21 @@ ast_graph_chain({ name: "greet", direction: "upstream", max_depth: 3 })
 - 第一次调用先 `set_repo({path: "/ABS/PATH/TO/REPO"})`
 - 后续工具调用不传 `path`（走默认仓库）
 
+## RepoMap 使用建议
+
+repo map 用于给 Agent 一个“全局鸟瞰 + 导航入口”（重要文件/符号 + Wiki 关联），建议作为分析前置步骤：
+
+```js
+repo_map({ max_files: 20, max_symbols: 5 })
+```
+
+如果你希望在一次检索结果里顺带附加 repo map（默认关闭，避免输出膨胀）：
+
+```js
+search_symbols({ query: "Foo", limit: 20, with_repo_map: true, repo_map_max_files: 20, repo_map_max_symbols: 5 })
+semantic_search({ query: "where is auth handled", topk: 5, with_repo_map: true })
+```
+
 ## Agent Skills / Rules
 
 本仓库提供了 Agent 可直接复用的 Skill/Rule 模版，旨在让 Agent 能够遵循最佳实践来使用上述工具。
@@ -87,8 +102,9 @@ ast_graph_chain({ name: "greet", direction: "upstream", max_depth: 3 })
 - `search_symbols` / `semantic_search` 没结果或明显过时
 - 用户刚改了大量文件/刚切分支/刚合并
 
-调用：
-- `index_repo({ overwrite: true, dim: 256 })`
+建议：
+- 用 `check_index({})` 判断索引结构是否兼容
+- 用 CLI 重建索引：`git-ai ai index --overwrite`
 - 如需共享索引：`pack_index({ lfs: false })`
 
 #### 检视套路（推荐顺序）

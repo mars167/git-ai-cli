@@ -1,38 +1,39 @@
-# 文档中心
+# Documentation Center
 
-这里汇集了 `git-ai` 的所有文档。
+This collects all documentation for `git-ai`.
 
-## 概览
+## Overview
 
-`git-ai` 是一个全局 CLI：
-- 默认行为像 `git`：`git-ai status/commit/push/...` 会代理到系统 `git`
-- AI 能力放在 `git-ai ai ...`：索引、检索、归档、hooks、MCP Server
+`git-ai` is a global CLI:
+- Default behavior acts like `git`: `git-ai status/commit/push/...` proxies to system `git`.
+- AI capabilities are under `git-ai ai ...`: Indexing, Retrieval, Packing, Hooks, MCP Server.
 
-### 核心目标
-- 把代码仓的结构化索引放在 `.git-ai/` 下，并可通过归档文件 `.git-ai/lancedb.tar.gz` 分享
-- 让 Agent 通过 MCP tools 低成本命中符号/片段，再按需读取文件
+### Core Goals
+- Store structured code repository indexes under `.git-ai/`, shareable via archive `.git-ai/lancedb.tar.gz`.
+- Enable Agents to hit symbols/snippets via MCP tools at low cost, then read files as needed.
 
-### 重要目录
-- `.git-ai/meta.json`：索引元数据（本地生成，通常不提交）
-- `.git-ai/lancedb/`：本地向量索引目录（通常不提交）
-- `.git-ai/lancedb.tar.gz`：归档后的索引（可提交/可用 git-lfs 追踪）
-- `.git-ai/ast-graph.sqlite`：AST 图数据库（CozoDB）
-- `.git-ai/ast-graph.export.json`：AST 图导出快照（用于非 SQLite 后端跨进程复用）
+### Important Directories
+- `.git-ai/meta.json`: Index metadata (locally generated, usually not committed).
+- `.git-ai/lancedb/`: Local vector index directory (usually not committed).
+- `.git-ai/lancedb.tar.gz`: Archived index (can be committed/tracked via git-lfs).
+- `.git-ai/ast-graph.sqlite`: AST graph database (CozoDB).
+- `.git-ai/ast-graph.export.json`: AST graph export snapshot (for non-SQLite backend cross-process reuse).
 
-## 目录
+## Directory
 
-### 使用指引
-- [安装与快速开始](./quickstart.md)
-- [命令行使用](./cli.md)
-- [Hooks 工作流](./hooks.md)
-- [MCP Server 接入](./mcp.md)
-- [Manifest Workspace 支持](./manifests.md)
-- [排障](./troubleshooting.md)
+### Usage Guides
+- [Installation & Quick Start](./zh-CN/quickstart.md) (Chinese)
+- [Windows Setup Guide](./windows-setup.md)
+- [CLI Usage](./zh-CN/cli.md) (Chinese)
+- [Hooks Workflow](./zh-CN/hooks.md) (Chinese)
+- [MCP Server Integration](./zh-CN/mcp.md) (Chinese)
+- [Manifest Workspace Support](./zh-CN/manifests.md) (Chinese)
+- [Troubleshooting](./zh-CN/troubleshooting.md) (Chinese)
 
-### 进阶与原理
-- [进阶：索引归档与 LFS](./advanced.md)
-- [架构设计](./design.md)
-- [开发规则](./rules.md)
+### Advanced & Principles
+- [Advanced: Index Archiving & LFS](./zh-CN/advanced.md) (Chinese)
+- [Architecture Design](./zh-CN/design.md) (Chinese)
+- [Development Rules](./zh-CN/rules.md) (Chinese)
 
-## Agent 集成
-- [MCP Skill & Rule 模版](./mcp.md#agent-skills--rules)
+## Agent Integration
+- [MCP Skill & Rule Templates](./zh-CN/mcp.md#agent-skills--rules) (Chinese)

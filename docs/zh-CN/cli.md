@@ -13,6 +13,7 @@ git-ai push -u origin main
 ## AI 子命令
 
 ```bash
+git-ai ai status
 git-ai ai index --overwrite
 git-ai ai query "search text" --limit 20
 git-ai ai query "get*repo" --mode wildcard --case-insensitive --limit 20
@@ -22,9 +23,43 @@ git-ai ai graph children src/mcp/server.ts --as-file
 git-ai ai graph query "?[name, kind] := *ast_symbol{ref_id, file, name, kind, signature, start_line, end_line}" --params "{}"
 git-ai ai pack
 git-ai ai unpack
+git-ai ai agent install
 git-ai ai hooks install
 git-ai ai serve
 ```
+
+说明：
+- 除 `ai status` 默认输出为人类可读文本外，其余命令输出均为 JSON（便于 Agent/脚本解析）。
+- `ai status --json` 可输出机器可读 JSON。
+- `ai index` 的进度条输出到 stderr，stdout 保持为 JSON（避免破坏管道解析）。
+
+## Trae 一键安装（skills/rules）
+
+将本仓库内置的 Trae Agent 模板（skills/rules）复制到目标仓库的 `.trae/` 目录，便于在 Trae 中直接加载。
+
+```bash
+cd /path/to/your-repo
+git-ai ai agent install
+git-ai ai agent install --overwrite
+git-ai ai agent install --to /custom/location/.trae
+```
+
+## RepoMap（全局鸟瞰，可选）
+
+为了支持类似 aider 的 repomap 能力（重要文件/符号排名、上下文映射、引导 Wiki 关联阅读），repo map 被集成到 **已有检索命令** 中，默认不输出，避免增加输出体积与 token 消耗。
+
+在需要时，显式开启：
+
+```bash
+git-ai ai query "HelloController" --with-repo-map --repo-map-files 20 --repo-map-symbols 5
+git-ai ai semantic "where is auth handled" --with-repo-map
+```
+
+参数说明：
+- `--with-repo-map`：在 JSON 输出中附加 `repo_map` 字段
+- `--repo-map-files <n>`：repo map 展示的文件数量上限（默认 20）
+- `--repo-map-symbols <n>`：每个文件展示的符号上限（默认 5）
+- `--wiki <dir>`：指定 Wiki 目录（默认自动探测 `docs/wiki` 或 `wiki`）
 
 ## 符号搜索模式（ai query）
 

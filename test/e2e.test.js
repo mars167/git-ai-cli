@@ -83,6 +83,14 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     runOk('node', [CLI, 'ai', 'index', '--overwrite'], repo);
     runOk('node', [CLI, 'ai', 'pack'], repo);
     runOk('node', [CLI, 'ai', 'pack', '--lfs'], repo);
+    runOk('node', [CLI, 'ai', 'agent', 'install'], repo);
+    assert.ok(runOk('node', [CLI, 'ai', 'agent', 'install', '--overwrite'], repo).status === 0);
+    {
+      const skill = await fs.readFile(path.join(repo, '.trae', 'skills', 'git-ai-mcp', 'SKILL.md'), 'utf-8');
+      const rule = await fs.readFile(path.join(repo, '.trae', 'rules', 'git-ai-mcp', 'RULE.md'), 'utf-8');
+      assert.ok(skill.includes('git-ai-mcp'));
+      assert.ok(rule.includes('git-ai-mcp'));
+    }
     runOk('git', ['add', '.git-ai/meta.json', '.git-ai/lancedb.tar.gz'], repo);
     runOk('git', ['commit', '-m', 'add git-ai index'], repo);
 
@@ -98,6 +106,12 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     const stat2 = await fs.stat(path.join(repo, '.git-ai', 'lancedb'));
     assert.ok(stat2.isDirectory());
     runOk('node', [CLI, 'ai', 'check-index'], repo);
+    {
+      const res = runOk('node', [CLI, 'ai', 'status', '--json'], repo);
+      const obj = JSON.parse(res.stdout);
+      assert.equal(obj.ok, true);
+      assert.equal(obj.expected.index_schema_version, 3);
+    }
 
     runOk('node', [CLI, 'ai', 'hooks', 'install'], repo);
     const hooksPath = runOk('git', ['config', '--get', 'core.hooksPath'], repo).stdout.trim();
@@ -128,6 +142,14 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
   }
 
   {
+    const res = runOk('node', [CLI, 'ai', 'query', 'HelloController', '--limit', '10', '--with-repo-map', '--repo-map-files', '5', '--repo-map-symbols', '2'], springRepo);
+    const obj = JSON.parse(res.stdout);
+    assert.ok(obj.repo_map && obj.repo_map.enabled === true);
+    assert.ok(Array.isArray(obj.repo_map.files));
+    assert.ok(obj.repo_map.files.length > 0);
+  }
+
+  {
     const res = runOk('node', [CLI, 'ai', 'query', 'PingController', '--limit', '10'], springMultiRepo);
     const obj = JSON.parse(res.stdout);
     assert.ok(obj.count > 0);
@@ -139,6 +161,15 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
     const obj = JSON.parse(res.stdout);
     assert.ok(Array.isArray(obj.hits));
     assert.ok(obj.hits.length > 0);
+  }
+
+  {
+    const res = runOk('node', [CLI, 'ai', 'semantic', 'hello controller', '--topk', '5', '--with-repo-map', '--repo-map-files', '5', '--repo-map-symbols', '2'], springRepo);
+    const obj = JSON.parse(res.stdout);
+    assert.ok(Array.isArray(obj.hits));
+    assert.ok(obj.repo_map && obj.repo_map.enabled === true);
+    assert.ok(Array.isArray(obj.repo_map.files));
+    assert.ok(obj.repo_map.files.length > 0);
   }
 
   {
@@ -215,4 +246,8 @@ test('git-ai can index repo-tool manifests workspace repos', async () => {
   const obj = JSON.parse(res.stdout);
   assert.ok(obj.count > 0);
   assert.ok(obj.rows.some(r => String(r.project?.path || '') === 'project-b' && String(r.file || '').includes('src/main/java/')));
+
+  const res2 = runOk('node', [CLI, 'ai', 'query', 'BController', '--limit', '20', '--with-repo-map'], manifestRepo);
+  const obj2 = JSON.parse(res2.stdout);
+  assert.ok(obj2.repo_map && obj2.repo_map.enabled === false);
 });
