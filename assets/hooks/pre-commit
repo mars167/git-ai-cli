@@ -11,7 +11,7 @@ if ! command -v git-ai >/dev/null 2>&1; then
   exit 0
 fi
 
-git-ai ai index --overwrite -p "$ROOT" >/dev/null
+git-ai ai index --incremental --staged -p "$ROOT" >/dev/null
 git-ai ai pack -p "$ROOT" >/dev/null
 
 git add .git-ai/meta.json .git-ai/lancedb.tar.gz || true

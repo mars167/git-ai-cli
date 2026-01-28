@@ -4,7 +4,7 @@
 stdio server 正常行为是“等待客户端连接”。如果你在终端直接运行，看起来像卡住是正常的。
 
 ## search_symbols/semantic_search 查不到结果
-- 先在仓库执行：`git-ai ai index --overwrite`
+- 先在仓库执行：`git-ai ai index --overwrite`（或仅更新变更：`git-ai ai index --incremental --staged`）
 - 如果你是通过 MCP 客户端启动且 cwd 不在仓库目录：先 `set_repo({path: ...})`
 
 ## Windows / Linux 安装失败

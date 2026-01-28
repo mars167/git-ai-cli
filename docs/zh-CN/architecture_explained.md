@@ -104,3 +104,13 @@
 `git-ai` 的架构本质上是在**检索效果**与**工程成本**之间寻找的一个极致平衡点。
 
 通过 **Tree-sitter + Hash Embedding + LanceDB + CozoDB** 的组合，我们在不引入任何重型依赖的前提下，实现了对代码库的**语义级（Vector）**和**结构级（Graph）**的双重索引。这种架构特别适合作为 AI Agent 的“代码知识外脑”，为其提供精准、快速的上下文检索能力。
+
+## 6. 按提交语义工件（DSR）
+
+除了面向当前 checkout 的 `.git-ai/` 索引缓存外，`git-ai` 还提供 DSR（Deterministic Semantic Record）作为 **按提交（per-commit）** 的语义工件：
+
+- 每个 commit 对应一份 DSR 文件：`.git-ai/dsr/<commit_hash>.json`
+- DSR 必须不可变且确定性；数据库索引仅作可删缓存（可由 DSR + Git 重建）
+- 历史遍历必须从 Git DAG 出发，DSR 只 enrich 节点，不定义边
+
+详见：[DSR 文档](./dsr.md)

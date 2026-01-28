@@ -15,12 +15,17 @@ git-ai push -u origin main
 ```bash
 git-ai ai status
 git-ai ai index --overwrite
+git-ai ai index --incremental --staged
 git-ai ai query "search text" --limit 20
 git-ai ai query "get*repo" --mode wildcard --case-insensitive --limit 20
 git-ai ai semantic "semantic query" --topk 10
 git-ai ai graph find "Foo"
 git-ai ai graph children src/mcp/server.ts --as-file
 git-ai ai graph query "?[name, kind] := *ast_symbol{ref_id, file, name, kind, signature, start_line, end_line}" --params "{}"
+git-ai ai dsr context --json
+git-ai ai dsr generate HEAD
+git-ai ai dsr rebuild-index
+git-ai ai dsr query symbol-evolution "GitAIV2MCPServer" --limit 200 --json
 git-ai ai pack
 git-ai ai unpack
 git-ai ai agent install
@@ -33,15 +38,27 @@ git-ai ai serve
 - `ai status --json` 可输出机器可读 JSON。
 - `ai index` 的进度条输出到 stderr，stdout 保持为 JSON（避免破坏管道解析）。
 
-## Trae 一键安装（skills/rules）
+## DSR（按提交、不可变、确定性）
 
-将本仓库内置的 Trae Agent 模板（skills/rules）复制到目标仓库的 `.trae/` 目录，便于在 Trae 中直接加载。
+DSR 命令入口为 `git-ai ai dsr ...`，产物位于 `.git-ai/dsr/`。
+
+- `dsr context`：发现 repo root / HEAD / branch，并检测 DSR 目录状态
+- `dsr generate <commit>`：为单个提交生成 DSR（存在且不同会报错，不会覆盖）
+- `dsr rebuild-index`：从 DSR 重建可删的查询加速索引
+- `dsr query symbol-evolution <symbol>`：只读查询；先遍历 Git DAG，再读取 DSR 附着语义；缺失 DSR 会停止并报错
+
+## Agent 一键安装（skills/rules）
+
+将本仓库内置的 Agent 模板（skills/rules）复制到目标仓库的 `.agents/` 目录，便于主流 code agent 识别与加载。
 
 ```bash
 cd /path/to/your-repo
 git-ai ai agent install
 git-ai ai agent install --overwrite
-git-ai ai agent install --to /custom/location/.trae
+git-ai ai agent install --to /custom/location/.agents
+
+# 可选：安装到 Trae 的 .trae 目录
+git-ai ai agent install --agent trae
 ```
 
 ## RepoMap（全局鸟瞰，可选）

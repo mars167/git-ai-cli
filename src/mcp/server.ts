@@ -10,6 +10,7 @@ import { packLanceDb, unpackLanceDb } from '../core/archive';
 import { defaultDbDir, openTablesByLang } from '../core/lancedb';
 import { ensureLfsTracking } from '../core/lfs';
 import { buildQueryVector, scoreAgainst } from '../core/search';
+import { IndexerV2 } from '../core/indexer';
 import { queryManifestWorkspace } from '../core/workspace';
 import { buildCallChainDownstreamByNameQuery, buildCallChainUpstreamByNameQuery, buildCalleesByNameQuery, buildCallersByNameQuery, buildChildrenQuery, buildFindReferencesQuery, buildFindSymbolsQuery, runAstGraphQuery } from '../core/astGraphQuery';
 import { buildCoarseWhere, filterAndRankSymbolRows, inferSymbolSearchMode, pickCoarseToken } from '../core/symbolSearch';
@@ -86,12 +87,12 @@ export class GitAIV2MCPServer {
         tools: [
           {
             name: 'get_repo',
-            description: 'Get current default repository root for this MCP server',
+            description: 'Get current default repository root for this MCP server. Risk: low (read-only).',
             inputSchema: { type: 'object', properties: {} },
           },
           {
             name: 'search_symbols',
-            description: 'Search symbols and return file locations (substring/prefix/wildcard/regex/fuzzy)',
+            description: 'Search symbols and return file locations (substring/prefix/wildcard/regex/fuzzy). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -112,7 +113,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'semantic_search',
-            description: 'Semantic search using SQ8 vectors stored in LanceDB (brute-force)',
+            description: 'Semantic search using SQ8 vectors stored in LanceDB (brute-force). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -130,7 +131,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'repo_map',
-            description: 'Generate a lightweight repository map (ranked files + top symbols + wiki links)',
+            description: 'Generate a lightweight repository map (ranked files + top symbols + wiki links). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -143,7 +144,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'check_index',
-            description: 'Check whether the repository index structure matches current expected schema',
+            description: 'Check whether the repository index structure matches current expected schema. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -152,8 +153,20 @@ export class GitAIV2MCPServer {
             },
           },
           {
+            name: 'rebuild_index',
+            description: 'Rebuild full repository index under .git-ai (LanceDB + AST graph). Risk: high (writes .git-ai; can be slow).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository path (optional)' },
+                dim: { type: 'number', default: 256 },
+                overwrite: { type: 'boolean', default: true },
+              },
+            },
+          },
+          {
             name: 'pack_index',
-            description: 'Pack .git-ai/lancedb into .git-ai/lancedb.tar.gz',
+            description: 'Pack .git-ai/lancedb into .git-ai/lancedb.tar.gz. Risk: medium (writes archive; may touch git-lfs config).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -164,7 +177,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'unpack_index',
-            description: 'Unpack .git-ai/lancedb.tar.gz into .git-ai/lancedb',
+            description: 'Unpack .git-ai/lancedb.tar.gz into .git-ai/lancedb. Risk: medium (writes .git-ai/lancedb).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -174,7 +187,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'list_files',
-            description: 'List repository files by glob pattern',
+            description: 'List repository files by glob pattern. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -186,7 +199,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'read_file',
-            description: 'Read a repository file with optional line range',
+            description: 'Read a repository file with optional line range. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -200,7 +213,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'set_repo',
-            description: 'Set default repository path for subsequent tool calls',
+            description: 'Set default repository path for subsequent tool calls. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -211,7 +224,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'ast_graph_query',
-            description: 'Run a CozoScript query against the AST graph database (advanced)',
+            description: 'Run a CozoScript query against the AST graph database (advanced). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -224,7 +237,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'ast_graph_find',
-            description: 'Find symbols by name prefix (case-insensitive) using the AST graph',
+            description: 'Find symbols by name prefix (case-insensitive) using the AST graph. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -238,7 +251,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'ast_graph_children',
-            description: 'List direct children in the AST containment graph (file -> top-level symbols, class -> methods)',
+            description: 'List direct children in the AST containment graph (file -> top-level symbols, class -> methods). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -251,7 +264,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'ast_graph_refs',
-            description: 'Find reference locations by name (calls/new/type)',
+            description: 'Find reference locations by name (calls/new/type). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -265,7 +278,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'ast_graph_callers',
-            description: 'Find callers by callee name',
+            description: 'Find callers by callee name. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -279,7 +292,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'ast_graph_callees',
-            description: 'Find callees by caller name',
+            description: 'Find callees by caller name. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -293,7 +306,7 @@ export class GitAIV2MCPServer {
           },
           {
             name: 'ast_graph_chain',
-            description: 'Compute call chain by symbol name (heuristic, name-based)',
+            description: 'Compute call chain by symbol name (heuristic, name-based). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -347,6 +360,18 @@ export class GitAIV2MCPServer {
         return {
           content: [{ type: 'text', text: JSON.stringify({ repoRoot, ...res }, null, 2) }],
           isError: !res.ok,
+        };
+      }
+
+      if (name === 'rebuild_index') {
+        const { repoRoot, scanRoot, meta } = await this.openRepoContext(callPath);
+        const overwrite = Boolean((args as any).overwrite ?? true);
+        const dimOpt = Number((args as any).dim ?? 256);
+        const dim = typeof meta?.dim === 'number' ? meta.dim : dimOpt;
+        const indexer = new IndexerV2({ repoRoot, scanRoot, dim, overwrite });
+        await indexer.run();
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ ok: true, repoRoot, scanRoot, dim, overwrite }, null, 2) }],
         };
       }
 

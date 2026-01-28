@@ -1,0 +1,165 @@
+name: trae-dsr
+version: "1.1.2"
+description: |
+  Non-negotiable constraints for a Git-native, decentralized semantic indexing system.
+  Enforces DSR determinism/immutability, canonical-vs-cache boundaries, and Git DAG authority.
+
+global_invariants:
+  - "Git commit DAG is authoritative for history and branches."
+  - "DSR is per-commit, immutable, deterministic."
+  - "DSR files are canonical artifacts; databases are rebuildable caches."
+  - "Never infer Git topology from semantic data."
+
+precedence:
+  conflict_resolution_order:
+    - git
+    - dsr
+    - database
+    - heuristics
+
+canonical_artifacts:
+  dsr:
+    directory: ".git-ai/dsr"
+    file_pattern: "<commit_hash>.json"
+    rules:
+      - "One commit → one DSR file."
+      - "DSR file must be immutable once generated."
+
+cli_entrypoints:
+  dsr:
+    - "git-ai ai dsr context --json"
+    - "git-ai ai dsr generate <commit>"
+    - "git-ai ai dsr rebuild-index"
+    - "git-ai ai dsr query symbol-evolution <symbol> --json"
+
+dsr_schema:
+  required_fields:
+    - commit_hash
+    - affected_symbols
+    - ast_operations
+    - semantic_change_type
+  optional_fields:
+    - summary
+    - risk_level
+  forbidden_fields:
+    - parent_commits
+    - branch_names
+    - timestamps_beyond_commit_time
+    - merge_topology
+
+must_follow:
+  - id: git_is_authority
+    severity: error
+    rule: |
+      Use Git commands to determine repo root, HEAD, branch, and history.
+      Never infer branches/parents/topology from semantic artifacts.
+
+  - id: do_not_parse_git_internals
+    severity: error
+    rule: |
+      Do not parse .git internals manually.
+      Use git rev-parse / git show / git log / git diff.
+
+  - id: per_commit_scope_only
+    severity: error
+    rule: |
+      For a given commit, analyze only the snapshot defined by that commit.
+      Do not inspect future commits.
+
+  - id: dsr_determinism
+    severity: error
+    rule: |
+      DSR generation must be deterministic: same inputs produce identical DSR output.
+      No randomness, no time-based or environment-based variance.
+
+  - id: dsr_immutability
+    severity: error
+    rule: |
+      Once written, a DSR file must not be modified.
+      If regeneration is necessary, treat it as a system error and stop.
+
+  - id: cache_is_derivable
+    severity: error
+    rule: |
+      Databases and indexes are caches only.
+      Every semantic fact stored in any database must be derivable from DSR + Git.
+
+  - id: read_only_query
+    severity: error
+    rule: |
+      Query execution is read-only with respect to DSR.
+      DSR enriches commit nodes; it never defines DAG edges.
+
+if_data_missing:
+  - "Rebuild caches from DSR."
+  - "If DSR missing, report and stop (do NOT infer)."
+
+prohibited:
+  - action: "Inferring Git parents/branches/topology from semantic data"
+    reason: "Git DAG is authoritative; semantics may only enrich nodes"
+
+  - action: "Writing semantic facts only into a database"
+    reason: "Databases must be derivable caches; DSR is canonical"
+
+  - action: "Including parent commits or branch names in DSR"
+    reason: "DSR must not encode merge topology or branch structure"
+
+  - action: "Mutating an existing DSR file"
+    reason: "DSR must be immutable once generated"
+
+phases:
+  phase_0:
+    name: "Context Discovery"
+    must_produce:
+      - commit_hash
+      - repo_root
+      - dsr_directory_state
+    tools:
+      - "git rev-parse"
+      - "git show"
+      - "git log"
+      - "filesystem inspection"
+
+  phase_1:
+    name: "Commit Semantic Extraction"
+    tools:
+      - "git diff <parent> <commit>"
+      - "language parser → AST"
+      - "AST diff engine"
+      - "semantic rules engine"
+    must_produce:
+      - ast_diff
+      - symbol_level_operations
+
+  phase_2:
+    name: "DSR Generation"
+    output_path: ".git-ai/dsr/<commit_hash>.json"
+
+  phase_3:
+    name: "Cache / Index Materialization"
+    tools:
+      - "SQLite / CozoDB"
+      - "LanceDB"
+
+  phase_4:
+    name: "Versioning & Distribution"
+    tools:
+      - "Git LFS"
+      - "pre-commit / pre-push hooks"
+    must_hold:
+      - "DSR files are Git-visible."
+      - "No central service required."
+
+  phase_5:
+    name: "Clone / Pull / Checkout Handling"
+    rules:
+      - "Never persist checkout-specific state into DSR."
+      - "Git DAG traversal always comes first."
+
+  phase_6:
+    name: "Query Execution"
+    supported_queries:
+      - semantic_blame
+      - semantic_diff
+      - symbol_evolution
+      - semantic_search

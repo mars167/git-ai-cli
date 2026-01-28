@@ -5,6 +5,7 @@
 - 引入 SQ8（8-bit 标量量化）降低向量存储体积。
 - 引入内容哈希去重：相同内容只存一份向量，多处引用仅存引用关系。
 - 索引口径：仅针对当前 checkout 的 HEAD 工作区；历史版本由 Git 负责管理（通过 checkout 获得对应索引快照）。
+- 提供按提交的 DSR（Deterministic Semantic Record）作为语义工件：按提交、不可变、确定性；数据库仅作可重建缓存。
 
 ## 2. 存储布局
 索引产物放在仓库根目录：
@@ -14,6 +15,10 @@
   - `ast-graph.sqlite`：AST 关系图数据库（CozoDB，优先 SQLite 引擎）
   - `ast-graph.export.json`：AST 图导出快照（仅在非 SQLite 后端时用于跨进程复用）
   - `meta.json`：索引元信息（维度、编码、构建时间等）
+
+DSR 产物（按提交，规范工件）：
+- `.git-ai/dsr/<commit_hash>.json`：单提交 DSR（不可变、确定性）
+- `.git-ai/dsr/dsr-index.sqlite`：DSR 查询加速索引（可删缓存，可由 DSR + Git 重建）
 
 ## 3. 数据模型（两张表）
 
@@ -77,3 +82,21 @@
 - `pre-push`：再次打包并校验归档未发生变化；若变化则阻止 push，提示先提交归档文件。
 - `post-checkout` / `post-merge`：若存在 `.git-ai/lancedb.tar.gz`，自动解包到 `.git-ai/lancedb/`。
 - 安装方式：在仓库中执行 `git-ai ai hooks install`（写入 .githooks/* 并设置 core.hooksPath=.githooks）。
+
+## 8. DSR（Deterministic Semantic Record）
+
+DSR 用于固化“每个提交的语义变化”，并严格遵守：
+
+- Git DAG 是历史/分支的唯一权威来源（DSR 只 enrich 节点，不定义边）
+- 一次提交 → 一份 DSR 文件（`.git-ai/dsr/<commit_hash>.json`）
+- DSR 一旦生成不可覆盖；若已存在且内容不同应停止并报错
+- 任何数据库/索引必须可由 DSR + Git 重建（缓存可删）
+
+CLI 入口：
+
+- `git-ai ai dsr context`
+- `git-ai ai dsr generate <commit>`
+- `git-ai ai dsr rebuild-index`
+- `git-ai ai dsr query symbol-evolution <symbol>`
+
+更详细说明见：[DSR 文档](./dsr.md)

@@ -35,28 +35,31 @@ export const agentCommand = new Command('agent')
   .alias('trae')
   .addCommand(
     new Command('install')
-      .description('Install skills/rules templates (default: <repoRoot>/.trae)')
+      .description('Install skills/rules templates (default: <repoRoot>/.agents)')
       .option('-p, --path <path>', 'Path inside the repository', '.')
-      .option('--to <dir>', 'Destination .trae directory (overrides --path)', '')
+      .option('--to <dir>', 'Destination directory (overrides default)', '')
+      .option('--agent <agent>', 'Template layout: agents|trae', 'agents')
       .option('--overwrite', 'Overwrite existing files', false)
       .action(async (options) => {
         const repoRoot = await resolveGitRoot(path.resolve(options.path));
-        const destTraeDir = String(options.to ?? '').trim() ? path.resolve(String(options.to)) : path.join(repoRoot, '.trae');
+        const agent = String((options as any).agent ?? 'agents').trim().toLowerCase();
+        const defaultDirName = agent === 'trae' ? '.trae' : '.agents';
+        const destDir = String(options.to ?? '').trim() ? path.resolve(String(options.to)) : path.join(repoRoot, defaultDirName);
         const overwrite = Boolean(options.overwrite ?? false);
 
         const packageRoot = await findPackageRoot(__dirname);
-        const srcTraeDir = path.join(packageRoot, '.trae');
-        const srcSkillsDir = path.join(srcTraeDir, 'skills');
-        const srcRulesDir = path.join(srcTraeDir, 'rules');
+        const srcTemplateDir = path.join(packageRoot, 'templates', 'agents', 'common');
+        const srcSkillsDir = path.join(srcTemplateDir, 'skills');
+        const srcRulesDir = path.join(srcTemplateDir, 'rules');
         if (!await fs.pathExists(srcSkillsDir) || !await fs.pathExists(srcRulesDir)) {
-          console.log(JSON.stringify({ ok: false, repoRoot, error: 'template_missing', srcTraeDir }, null, 2));
+          console.log(JSON.stringify({ ok: false, repoRoot, error: 'template_missing', srcTemplateDir }, null, 2));
           process.exitCode = 2;
           return;
         }
 
-        const dstSkillsDir = path.join(destTraeDir, 'skills');
-        const dstRulesDir = path.join(destTraeDir, 'rules');
-        await fs.ensureDir(destTraeDir);
+        const dstSkillsDir = path.join(destDir, 'skills');
+        const dstRulesDir = path.join(destDir, 'rules');
+        await fs.ensureDir(destDir);
         await fs.copy(srcSkillsDir, dstSkillsDir, { overwrite });
         await fs.copy(srcRulesDir, dstRulesDir, { overwrite });
 
@@ -64,6 +67,6 @@ export const agentCommand = new Command('agent')
           skills: await listDirNames(dstSkillsDir),
           rules: await listDirNames(dstRulesDir),
         };
-        console.log(JSON.stringify({ ok: true, repoRoot, destTraeDir, overwrite, installed }, null, 2));
+        console.log(JSON.stringify({ ok: true, repoRoot, agent, destDir, overwrite, installed }, null, 2));
       })
   );

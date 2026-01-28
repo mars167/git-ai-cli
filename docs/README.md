@@ -11,6 +11,7 @@ This collects all documentation for `git-ai`.
 ### Core Goals
 - Store structured code repository indexes under `.git-ai/`, shareable via archive `.git-ai/lancedb.tar.gz`.
 - Enable Agents to hit symbols/snippets via MCP tools at low cost, then read files as needed.
+- Persist per-commit semantic change as DSR (immutable, deterministic), and rebuild caches from it.
 
 ### Important Directories
 - `.git-ai/meta.json`: Index metadata (locally generated, usually not committed).
@@ -18,6 +19,8 @@ This collects all documentation for `git-ai`.
 - `.git-ai/lancedb.tar.gz`: Archived index (can be committed/tracked via git-lfs).
 - `.git-ai/ast-graph.sqlite`: AST graph database (CozoDB).
 - `.git-ai/ast-graph.export.json`: AST graph export snapshot (for non-SQLite backend cross-process reuse).
+- `.git-ai/dsr/<commit_hash>.json`: Per-commit DSR (canonical artifact, immutable).
+- `.git-ai/dsr/dsr-index.sqlite`: DSR query accelerator (rebuildable cache from DSR + Git).
 
 ## Directory
 
@@ -29,6 +32,7 @@ This collects all documentation for `git-ai`.
 - [MCP Server Integration](./zh-CN/mcp.md) (Chinese)
 - [Manifest Workspace Support](./zh-CN/manifests.md) (Chinese)
 - [Troubleshooting](./zh-CN/troubleshooting.md) (Chinese)
+- [DSR (Deterministic Semantic Record)](./zh-CN/dsr.md) (Chinese)
 
 ### Advanced & Principles
 - [Advanced: Index Archiving & LFS](./zh-CN/advanced.md) (Chinese)

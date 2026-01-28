@@ -57,10 +57,21 @@ git-ai ai index --overwrite
 git-ai ai query Indexer --limit 10
 git-ai ai semantic "semantic search" --topk 5
 git-ai ai graph find GitAIV2MCPServer
+git-ai ai dsr context --json
+git-ai ai dsr generate HEAD
+git-ai ai dsr rebuild-index
+git-ai ai dsr query symbol-evolution GitAIV2MCPServer --limit 200 --json
 git-ai ai pack
 git-ai ai unpack
 git-ai ai serve
 ```
+
+## DSR (Deterministic Semantic Record)
+
+DSR is a per-commit, immutable, deterministic semantic artifact:
+
+- Canonical files: `.git-ai/dsr/<commit_hash>.json`
+- Databases are rebuildable caches derived from DSR + Git (never the other way around)
 
 ## MCP Server (stdio)
 
@@ -101,15 +112,15 @@ Note:
 - `git-ai ai serve` defaults to using the current directory as the repository location (similar to git usage).
 - If the host cannot guarantee that the MCP process working directory (cwd) points to the repository directory, it is recommended that the Agent execute `set_repo({path: \"/ABS/PATH/TO/REPO\"})` before the first call, or pass the `path` parameter in every tool call.
 
-## Agent Skills / Rules (Trae)
+## Agent Templates
 
 This repository provides reusable Skill/Rule templates for Agents:
-- Skill: [./.trae/skills/git-ai-mcp/SKILL.md](./.trae/skills/git-ai-mcp/SKILL.md)
-- Rule: [./.trae/rules/git-ai-mcp/RULE.md](./.trae/rules/git-ai-mcp/RULE.md)
+- Skill: [templates/agents/common/skills/git-ai-mcp/SKILL.md](./templates/agents/common/skills/git-ai-mcp/SKILL.md)
+- Rule: [templates/agents/common/rules/git-ai-mcp/RULE.md](./templates/agents/common/rules/git-ai-mcp/RULE.md)
 
 Usage:
-- After opening this repository in Trae, the Agent will automatically load Skills under `.trae/skills/**`.
-- When you need to add constraints to the Agent, put the Rule content into your Agent configuration/system rules (or directly reference `.trae/rules/**` in this repository as a source).
+- Install the templates into your target repository (default: `.agents/`).
+- For Trae compatibility, you can install into `.trae/` with `--agent trae`.
 
 One-click install into another repository:
 
@@ -117,7 +128,8 @@ One-click install into another repository:
 cd /path/to/your-repo
 git-ai ai agent install
 git-ai ai agent install --overwrite
-git-ai ai agent install --to /custom/location/.trae
+git-ai ai agent install --to /custom/location/.agents
+git-ai ai agent install --agent trae
 ```
 
 ## Git hooks (Rebuild index before commit, verify pack before push, auto unpack on checkout)
@@ -130,7 +142,7 @@ git-ai ai hooks status
 ```
 
 Explanation:
-- `pre-commit`: Automatically `index --overwrite` + `pack`, and add `.git-ai/meta.json` and `.git-ai/lancedb.tar.gz` to the staging area.
+- `pre-commit`: Automatically `index --incremental --staged` + `pack`, and add `.git-ai/meta.json` and `.git-ai/lancedb.tar.gz` to the staging area.
 - `pre-push`: `pack` again, if the archive changes, block the push and prompt to submit the archive file first.
 - `post-checkout` / `post-merge`: If `.git-ai/lancedb.tar.gz` exists, automatically `unpack`.
 
