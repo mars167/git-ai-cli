@@ -15,8 +15,7 @@ git-ai ai serve
 ## 工具列表
 
 ### 仓库管理
-- `get_repo({ path? })`：返回当前默认仓库根目录（调试用）
-- `set_repo({ path })`：设置默认仓库路径，避免依赖进程工作目录
+- `get_repo({ path? })`：返回指定 `path` 对应的仓库根目录与扫描根目录（不传则使用 serve 的默认目录；调试用）
 
 ### 索引管理
 - `check_index({ path? })`：检查索引结构是否与当前版本一致（不一致需重建索引）
@@ -45,14 +44,14 @@ git-ai ai serve
 列出指定文件里的顶层符号（推荐：无需手动算 file_id）：
 
 ```js
-ast_graph_children({ id: "src/mcp/server.ts", as_file: true })
+ast_graph_children({ path: "/ABS/PATH/TO/REPO", id: "src/mcp/server.ts", as_file: true })
 ```
 
 查询某个方法/函数的调用者（推荐：用 callers/callees/chain，不用手写 CozoScript）：
 
 ```js
-ast_graph_callers({ name: "greet", limit: 50 })
-ast_graph_chain({ name: "greet", direction: "upstream", max_depth: 3 })
+ast_graph_callers({ path: "/ABS/PATH/TO/REPO", name: "greet", limit: 50 })
+ast_graph_chain({ path: "/ABS/PATH/TO/REPO", name: "greet", direction: "upstream", max_depth: 3 })
 ```
 
 列出指定文件里的顶层符号（进阶：直接写 CozoScript，需要 file_id）：
@@ -65,22 +64,22 @@ ast_graph_chain({ name: "greet", direction: "upstream", max_depth: 3 })
 ```
 
 ## 推荐调用方式（让 Agent 自动传对路径）
-- 第一次调用先 `set_repo({path: "/ABS/PATH/TO/REPO"})`
-- 后续工具调用不传 `path`（走默认仓库）
+- 推荐每次工具调用都显式传 `path: "/ABS/PATH/TO/REPO"`，避免依赖进程状态/工作目录（保证调用原子性）
+- 如不传 `path`，则使用启动 MCP server 时的默认目录；可用 `git-ai ai serve --path /ABS/PATH/TO/REPO` 设置默认仓库
 
 ## RepoMap 使用建议
 
 repo map 用于给 Agent 一个"全局鸟瞰 + 导航入口"（重要文件/符号 + Wiki 关联），建议作为分析前置步骤：
 
 ```js
-repo_map({ max_files: 20, max_symbols: 5 })
+repo_map({ path: "/ABS/PATH/TO/REPO", max_files: 20, max_symbols: 5 })
 ```
 
 如果你希望在一次检索结果里顺带附加 repo map（默认关闭，避免输出膨胀）：
 
 ```js
-search_symbols({ query: "Foo", limit: 20, with_repo_map: true, repo_map_max_files: 20, repo_map_max_symbols: 5 })
-semantic_search({ query: "where is auth handled", topk: 5, with_repo_map: true })
+search_symbols({ path: "/ABS/PATH/TO/REPO", query: "Foo", limit: 20, with_repo_map: true, repo_map_max_files: 20, repo_map_max_symbols: 5 })
+semantic_search({ path: "/ABS/PATH/TO/REPO", query: "where is auth handled", topk: 5, with_repo_map: true })
 ```
 
 ## Agent Skills / Rules

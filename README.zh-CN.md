@@ -110,7 +110,7 @@ git-ai ai serve
 
 说明：
 - `git-ai ai serve` 默认使用当前目录作为仓库定位起点（类似 git 的用法）。
-- 若宿主无法保证 MCP 进程的工作目录（cwd）指向仓库目录，推荐由 Agent 在首次调用前先执行一次 `set_repo({path: \"/ABS/PATH/TO/REPO\"})`，或在每次 tool 调用里传 `path` 参数。
+- 若宿主无法保证 MCP 进程的工作目录（cwd）指向仓库目录，推荐每次 tool 调用都显式传 `path` 参数（保证调用原子性），或使用 `git-ai ai serve --path /ABS/PATH/TO/REPO` 启动。
 
 ## Agent 模版（skills/rules）
 

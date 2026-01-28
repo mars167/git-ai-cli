@@ -87,8 +87,13 @@ export class GitAIV2MCPServer {
         tools: [
           {
             name: 'get_repo',
-            description: 'Get current default repository root for this MCP server. Risk: low (read-only).',
-            inputSchema: { type: 'object', properties: {} },
+            description: 'Resolve repository root and scan root for a given path (or the server startDir by default). Risk: low (read-only).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository path (optional)' },
+              },
+            },
           },
           {
             name: 'search_symbols',
@@ -212,17 +217,6 @@ export class GitAIV2MCPServer {
             },
           },
           {
-            name: 'set_repo',
-            description: 'Set default repository path for subsequent tool calls. Risk: low (read-only).',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: { type: 'string' },
-              },
-              required: ['path'],
-            },
-          },
-          {
             name: 'ast_graph_query',
             description: 'Run a CozoScript query against the AST graph database (advanced). Risk: low (read-only).',
             inputSchema: {
@@ -336,17 +330,6 @@ export class GitAIV2MCPServer {
 
       if (name === 'get_repo') {
         const ctx = await this.openRepoContext(callPath);
-        const repoRoot = ctx.repoRoot;
-        const scanRoot = ctx.scanRoot;
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ ok: true, startDir: this.startDir, repoRoot, scanRoot }, null, 2) }],
-        };
-      }
-
-      if (name === 'set_repo') {
-        const p = String((args as any).path ?? '');
-        this.startDir = path.resolve(p);
-        const ctx = await this.openRepoContext(this.startDir);
         const repoRoot = ctx.repoRoot;
         const scanRoot = ctx.scanRoot;
         return {

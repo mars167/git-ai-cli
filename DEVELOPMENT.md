@@ -76,7 +76,7 @@ git-ai ai hooks status
 git-ai ai serve
 ```
 
-If the host cannot guarantee the working directory points to the repository directory, you can let the Agent call `set_repo({path: ...})` first, or pass `path` in tool parameters.
+If the host cannot guarantee the working directory points to the repository directory, pass `path` in tool parameters (recommended for atomicity), or start the server with `git-ai ai serve --path /ABS/PATH/TO/REPO`.
 
 ## Publishing Notes (npm)
 - Ensure `npm run build` has generated `dist/**`
