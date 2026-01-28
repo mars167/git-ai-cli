@@ -4,7 +4,7 @@
 
 ## 启动
 
-在目标仓库目录执行：
+在任意目录执行：
 
 ```bash
 git-ai ai serve
@@ -15,29 +15,29 @@ git-ai ai serve
 ## 工具列表
 
 ### 仓库管理
-- `get_repo({ path? })`：返回指定 `path` 对应的仓库根目录与扫描根目录（不传则使用 serve 的默认目录；调试用）
+- `get_repo({ path })`：返回指定 `path` 对应的仓库根目录与扫描根目录（调试用）
 
 ### 索引管理
-- `check_index({ path? })`：检查索引结构是否与当前版本一致（不一致需重建索引）
-- `rebuild_index({ path?, dim?, overwrite? })`：重建全量索引（写入 `.git-ai/`；Risk: high）
-- `pack_index({ path?, lfs? })`：打包索引为 `.git-ai/lancedb.tar.gz`（可选启用 git-lfs track）
-- `unpack_index({ path? })`：解包索引归档
+- `check_index({ path })`：检查索引结构是否与当前版本一致（不一致需重建索引）
+- `rebuild_index({ path, dim?, overwrite? })`：重建全量索引（写入 `.git-ai/`；Risk: high）
+- `pack_index({ path, lfs? })`：打包索引为 `.git-ai/lancedb.tar.gz`（可选启用 git-lfs track）
+- `unpack_index({ path })`：解包索引归档
 
 ### 检索
-- `search_symbols({ query, mode?, case_insensitive?, max_candidates?, limit?, lang?, path?, with_repo_map?, repo_map_max_files?, repo_map_max_symbols?, wiki_dir? })`：符号检索（lang: auto/all/java/ts；可选附带 repo_map）
-- `semantic_search({ query, topk?, lang?, path?, with_repo_map?, repo_map_max_files?, repo_map_max_symbols?, wiki_dir? })`：基于 LanceDB + SQ8 的语义检索（lang: auto/all/java/ts；可选附带 repo_map）
-- `repo_map({ path?, max_files?, max_symbols?, wiki_dir? })`：生成 repo map（重要文件/符号排名、引导 Wiki 阅读）
-- `ast_graph_find({ prefix, limit?, lang?, path? })`：按名字前缀查找符号定义（大小写不敏感；lang: auto/all/java/ts）
-- `ast_graph_children({ id, as_file?, path? })`：列出包含关系的直接子节点（文件→顶层符号、类→方法等）
-- `ast_graph_refs({ name, limit?, lang?, path? })`：按名字查引用位置（call/new/type；lang: auto/all/java/ts）
-- `ast_graph_callers({ name, limit?, lang?, path? })`：按名字查调用者（callee name；lang: auto/all/java/ts）
-- `ast_graph_callees({ name, limit?, lang?, path? })`：按名字查被调用者（caller name；lang: auto/all/java/ts）
-- `ast_graph_chain({ name, direction?, max_depth?, limit?, lang?, path? })`：按名字查调用链路（upstream/downstream，最大深度；lang: auto/all/java/ts）
-- `ast_graph_query({ query, params?, path? })`：对 AST 图数据库执行 CozoScript 查询（进阶）
+- `search_symbols({ path, query, mode?, case_insensitive?, max_candidates?, limit?, lang?, with_repo_map?, repo_map_max_files?, repo_map_max_symbols?, wiki_dir? })`：符号检索（lang: auto/all/java/ts；可选附带 repo_map）
+- `semantic_search({ path, query, topk?, lang?, with_repo_map?, repo_map_max_files?, repo_map_max_symbols?, wiki_dir? })`：基于 LanceDB + SQ8 的语义检索（lang: auto/all/java/ts；可选附带 repo_map）
+- `repo_map({ path, max_files?, max_symbols?, wiki_dir? })`：生成 repo map（重要文件/符号排名、引导 Wiki 阅读）
+- `ast_graph_find({ path, prefix, limit?, lang? })`：按名字前缀查找符号定义（大小写不敏感；lang: auto/all/java/ts）
+- `ast_graph_children({ path, id, as_file? })`：列出包含关系的直接子节点（文件→顶层符号、类→方法等）
+- `ast_graph_refs({ path, name, limit?, lang? })`：按名字查引用位置（call/new/type；lang: auto/all/java/ts）
+- `ast_graph_callers({ path, name, limit?, lang? })`：按名字查调用者（callee name；lang: auto/all/java/ts）
+- `ast_graph_callees({ path, name, limit?, lang? })`：按名字查被调用者（caller name；lang: auto/all/java/ts）
+- `ast_graph_chain({ path, name, direction?, max_depth?, limit?, lang? })`：按名字查调用链路（upstream/downstream，最大深度；lang: auto/all/java/ts）
+- `ast_graph_query({ path, query, params? })`：对 AST 图数据库执行 CozoScript 查询（进阶）
 
 ### 文件读取
-- `list_files({ path?, pattern?, limit? })`：按 glob 列文件（默认忽略 node_modules, .git 等）
-- `read_file({ path?, file, start_line?, end_line? })`：按行读取文件片段
+- `list_files({ path, pattern?, limit? })`：按 glob 列文件（默认忽略 node_modules, .git 等）
+- `read_file({ path, file, start_line?, end_line? })`：按行读取文件片段
 
 ## AST 图查询示例
 
@@ -64,8 +64,7 @@ ast_graph_chain({ path: "/ABS/PATH/TO/REPO", name: "greet", direction: "upstream
 ```
 
 ## 推荐调用方式（让 Agent 自动传对路径）
-- 推荐每次工具调用都显式传 `path: "/ABS/PATH/TO/REPO"`，避免依赖进程状态/工作目录（保证调用原子性）
-- 如不传 `path`，则使用启动 MCP server 时的默认目录；可用 `git-ai ai serve --path /ABS/PATH/TO/REPO` 设置默认仓库
+- MCP tools 的 `path` 为必传：每次工具调用都必须显式传 `path: "/ABS/PATH/TO/REPO"`（保证调用原子性）
 
 ## RepoMap 使用建议
 

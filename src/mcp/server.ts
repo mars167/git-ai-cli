@@ -87,12 +87,13 @@ export class GitAIV2MCPServer {
         tools: [
           {
             name: 'get_repo',
-            description: 'Resolve repository root and scan root for a given path (or the server startDir by default). Risk: low (read-only).',
+            description: 'Resolve repository root and scan root for a given path. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
+              required: ['path'],
             },
           },
           {
@@ -106,14 +107,14 @@ export class GitAIV2MCPServer {
                 case_insensitive: { type: 'boolean', default: false },
                 max_candidates: { type: 'number', default: 1000 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 limit: { type: 'number', default: 50 },
                 with_repo_map: { type: 'boolean', default: false },
                 repo_map_max_files: { type: 'number', default: 20 },
                 repo_map_max_symbols: { type: 'number', default: 5 },
                 wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' },
               },
-              required: ['query'],
+              required: ['path', 'query'],
             },
           },
           {
@@ -123,7 +124,7 @@ export class GitAIV2MCPServer {
               type: 'object',
               properties: {
                 query: { type: 'string' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 topk: { type: 'number', default: 10 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
                 with_repo_map: { type: 'boolean', default: false },
@@ -131,7 +132,7 @@ export class GitAIV2MCPServer {
                 repo_map_max_symbols: { type: 'number', default: 5 },
                 wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' },
               },
-              required: ['query'],
+              required: ['path', 'query'],
             },
           },
           {
@@ -140,11 +141,12 @@ export class GitAIV2MCPServer {
             inputSchema: {
               type: 'object',
               properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 max_files: { type: 'number', default: 20 },
                 max_symbols: { type: 'number', default: 5 },
                 wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' },
               },
+              required: ['path'],
             },
           },
           {
@@ -153,8 +155,9 @@ export class GitAIV2MCPServer {
             inputSchema: {
               type: 'object',
               properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
+              required: ['path'],
             },
           },
           {
@@ -163,10 +166,11 @@ export class GitAIV2MCPServer {
             inputSchema: {
               type: 'object',
               properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 dim: { type: 'number', default: 256 },
                 overwrite: { type: 'boolean', default: true },
               },
+              required: ['path'],
             },
           },
           {
@@ -175,9 +179,10 @@ export class GitAIV2MCPServer {
             inputSchema: {
               type: 'object',
               properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 lfs: { type: 'boolean', default: false, description: 'Run git lfs track for .git-ai/lancedb.tar.gz' },
               },
+              required: ['path'],
             },
           },
           {
@@ -186,8 +191,9 @@ export class GitAIV2MCPServer {
             inputSchema: {
               type: 'object',
               properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
+              required: ['path'],
             },
           },
           {
@@ -196,10 +202,11 @@ export class GitAIV2MCPServer {
             inputSchema: {
               type: 'object',
               properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 pattern: { type: 'string', default: '**/*' },
                 limit: { type: 'number', default: 500 },
               },
+              required: ['path'],
             },
           },
           {
@@ -208,12 +215,12 @@ export class GitAIV2MCPServer {
             inputSchema: {
               type: 'object',
               properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 file: { type: 'string', description: 'File path relative to repo root' },
                 start_line: { type: 'number', default: 1 },
                 end_line: { type: 'number', default: 200 },
               },
-              required: ['file'],
+              required: ['path', 'file'],
             },
           },
           {
@@ -224,9 +231,9 @@ export class GitAIV2MCPServer {
               properties: {
                 query: { type: 'string' },
                 params: { type: 'object', default: {} },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['query'],
+              required: ['path', 'query'],
             },
           },
           {
@@ -236,11 +243,11 @@ export class GitAIV2MCPServer {
               type: 'object',
               properties: {
                 prefix: { type: 'string' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 limit: { type: 'number', default: 50 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
               },
-              required: ['prefix'],
+              required: ['path', 'prefix'],
             },
           },
           {
@@ -251,9 +258,9 @@ export class GitAIV2MCPServer {
               properties: {
                 id: { type: 'string', description: 'Parent id (ref_id or file_id; or file path when as_file=true)' },
                 as_file: { type: 'boolean', default: false },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['id'],
+              required: ['path', 'id'],
             },
           },
           {
@@ -265,9 +272,9 @@ export class GitAIV2MCPServer {
                 name: { type: 'string' },
                 limit: { type: 'number', default: 200 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['name'],
+              required: ['path', 'name'],
             },
           },
           {
@@ -279,9 +286,9 @@ export class GitAIV2MCPServer {
                 name: { type: 'string' },
                 limit: { type: 'number', default: 200 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['name'],
+              required: ['path', 'name'],
             },
           },
           {
@@ -293,9 +300,9 @@ export class GitAIV2MCPServer {
                 name: { type: 'string' },
                 limit: { type: 'number', default: 200 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['name'],
+              required: ['path', 'name'],
             },
           },
           {
@@ -310,9 +317,9 @@ export class GitAIV2MCPServer {
                 limit: { type: 'number', default: 500 },
                 min_name_len: { type: 'number', default: 1 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['name'],
+              required: ['path', 'name'],
             },
           },
         ],
@@ -327,6 +334,9 @@ export class GitAIV2MCPServer {
       const startedAt = Date.now();
 
       const response = await (async () => {
+      if (typeof callPath !== 'string' || callPath.trim() === '') {
+        throw new Error('Missing required argument: path');
+      }
 
       if (name === 'get_repo') {
         const ctx = await this.openRepoContext(callPath);

@@ -109,8 +109,8 @@ git-ai ai serve
 ```
 
 Note:
-- `git-ai ai serve` defaults to using the current directory as the repository location (similar to git usage).
-- If the host cannot guarantee that the MCP process working directory (cwd) points to the repository directory, pass the `path` parameter in every tool call (recommended for atomicity), or start the server with `git-ai ai serve --path /ABS/PATH/TO/REPO`.
+- `git-ai ai serve` only starts the MCP stdio server.
+- MCP tools require `path` in every tool call to select the target repository (atomic, no implicit defaults).
 
 ## Agent Templates
 

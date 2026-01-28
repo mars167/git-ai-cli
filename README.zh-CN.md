@@ -109,8 +109,8 @@ git-ai ai serve
 ```
 
 说明：
-- `git-ai ai serve` 默认使用当前目录作为仓库定位起点（类似 git 的用法）。
-- 若宿主无法保证 MCP 进程的工作目录（cwd）指向仓库目录，推荐每次 tool 调用都显式传 `path` 参数（保证调用原子性），或使用 `git-ai ai serve --path /ABS/PATH/TO/REPO` 启动。
+- `git-ai ai serve` 仅负责启动 MCP stdio server。
+- MCP tools 的 `path` 为必传：每次 tool 调用都必须显式传 `path` 参数来选择目标仓库（调用原子化，无隐式默认）。
 
 ## Agent 模版（skills/rules）
 

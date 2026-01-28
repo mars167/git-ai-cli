@@ -253,33 +253,3 @@ test('mcp server supports atomic tool calls via path arg', async () => {
     await transport.close();
   }
 });
-
-test('mcp server supports --path on serve', async () => {
-  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
-  const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
-
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'git-ai-mcp-'));
-  const repoDir = await createRepo(tmp, 'repo', {
-    'src/foo.ts': 'export function foo() { return 1; }\n',
-  });
-  const repoRootReal = await fs.realpath(repoDir);
-
-  const transport = new StdioClientTransport({
-    command: 'node',
-    args: [CLI, 'ai', 'serve', '--path', repoDir],
-    stderr: 'ignore',
-  });
-
-  const client = new Client({ name: 'git-ai-test', version: '0.0.0' }, { capabilities: {} });
-
-  try {
-    await client.connect(transport);
-    const call = await client.callTool({ name: 'get_repo', arguments: {} });
-    const text = String(call?.content?.[0]?.text ?? '');
-    const parsed = text ? JSON.parse(text) : null;
-    assert.equal(parsed.ok, true);
-    assert.equal(await fs.realpath(parsed.repoRoot), repoRootReal);
-  } finally {
-    await transport.close();
-  }
-});

@@ -6,8 +6,7 @@ stdio server 正常行为是“等待客户端连接”。如果你在终端直�
 ## search_symbols/semantic_search 查不到结果
 - 先在仓库执行：`git-ai ai index --overwrite`（或仅更新变更：`git-ai ai index --incremental --staged`）
 - 如果你是通过 MCP 客户端启动且 cwd 不在仓库目录：
-  - 启动时指定默认仓库：`git-ai ai serve --path /ABS/PATH/TO/REPO`
-  - 或者每次 MCP tool 调用都显式传 `path: "/ABS/PATH/TO/REPO"`（推荐，保证调用原子性）
+  - MCP tools 的 `path` 为必传：每次 MCP tool 调用都显式传 `path: "/ABS/PATH/TO/REPO"`（保证调用原子性）
 
 ## Windows / Linux 安装失败
 - Node 版本需 >= 18，且架构为 x64/arm64（LanceDB N-API 预编译包支持的范围）
