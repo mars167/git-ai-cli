@@ -1,5 +1,5 @@
 name: trae-dsr
-version: "1.1.2"
+version: "2.0.0"
 description: |
   Non-negotiable constraints for a Git-native, decentralized semantic indexing system.
   Enforces DSR determinism/immutability, canonical-vs-cache boundaries, and Git DAG authority.
