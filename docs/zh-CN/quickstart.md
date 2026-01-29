@@ -14,6 +14,12 @@ git-ai ai status
 git-ai ai index --overwrite
 ```
 
+后续如果你只想对变更文件做快速更新（例如配合 git hooks 在提交前重建索引），可以使用增量模式：
+
+```bash
+git-ai ai index --incremental --staged
+```
+
 ## 语义检索/符号检索
 
 ```bash

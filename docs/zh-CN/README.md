@@ -13,6 +13,7 @@
 ### 核心目标
 - 把代码仓的结构化索引放在 `.git-ai/` 下，并可通过归档文件 `.git-ai/lancedb.tar.gz` 分享
 - 让 Agent 通过 MCP tools 低成本命中符号/片段，再按需读取文件
+- 把每个提交的语义变化固化为 DSR（按提交、不可变、确定性），并可据此重建缓存
 
 ### 重要目录
 - `.git-ai/meta.json`：索引元数据（本地生成，通常不提交）
@@ -20,6 +21,8 @@
 - `.git-ai/lancedb.tar.gz`：归档后的索引（可提交/可用 git-lfs 追踪）
 - `.git-ai/ast-graph.sqlite`：AST 图数据库（CozoDB）
 - `.git-ai/ast-graph.export.json`：AST 图导出快照（用于非 SQLite 后端跨进程复用）
+- `.git-ai/dsr/<commit_hash>.json`：单提交 DSR（规范工件，按提交、不可变）
+- `.git-ai/dsr/dsr-index.sqlite`：DSR 查询加速索引（可删缓存，可由 DSR + Git 重建）
 
 ## 目录
 
@@ -31,6 +34,7 @@
 - [MCP Server 接入](./mcp.md)
 - [Manifest Workspace 支持](./manifests.md)
 - [排障](./troubleshooting.md)
+- [DSR（Deterministic Semantic Record）](./dsr.md)
 
 ### 进阶与原理
 - [进阶：索引归档与 LFS](./advanced.md)

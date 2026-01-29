@@ -76,7 +76,7 @@ git-ai ai hooks status
 git-ai ai serve
 ```
 
-如果宿主无法保证工作目录指向仓库目录，可以先让 Agent 调用 `set_repo({path: ...})`，或在工具参数里传 `path`。
+MCP tools 的 `path` 为必传：每次工具调用都必须显式传 `path` 参数来选择目标仓库（调用原子化，无隐式默认）。
 
 ## 发布注意事项（npm）
 - 确保 `npm run build` 已生成 `dist/**`

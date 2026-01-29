@@ -8,6 +8,9 @@ dist/
 .git-ai/ast-graph.sqlite
 .git-ai/ast-graph.export.json
 .git-ai/._*
+.git-ai/dsr/dsr-index.sqlite
+.git-ai/dsr/dsr-index.export.json
 .tmp-hook-test/
 .vscode/
 .trae/documents/
+.trae/

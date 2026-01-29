@@ -10,12 +10,14 @@ import { graphCommand } from './graph';
 import { checkIndexCommand } from './checkIndex';
 import { statusCommand } from './status';
 import { agentCommand } from './trae';
+import { dsrCommand } from './dsr';
 
 export const aiCommand = new Command('ai')
   .description('AI features (indexing, search, hooks, MCP)')
   .addCommand(indexCommand)
   .addCommand(checkIndexCommand)
   .addCommand(statusCommand)
+  .addCommand(dsrCommand)
   .addCommand(queryCommand)
   .addCommand(semanticCommand)
   .addCommand(graphCommand)

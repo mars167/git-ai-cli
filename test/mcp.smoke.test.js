@@ -37,7 +37,7 @@ async function createRepo(baseDir, name, files) {
   return repoDir;
 }
 
-test('mcp server exposes set_repo and supports path arg', async () => {
+test('mcp server supports atomic tool calls via path arg', async () => {
   const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
   const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
 
@@ -82,7 +82,6 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     assert.ok(toolNames.has('search_symbols'));
     assert.ok(toolNames.has('semantic_search'));
     assert.ok(toolNames.has('repo_map'));
-    assert.ok(toolNames.has('set_repo'));
     assert.ok(toolNames.has('get_repo'));
     assert.ok(toolNames.has('check_index'));
     assert.ok(toolNames.has('pack_index'));
@@ -98,7 +97,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     assert.ok(toolNames.has('ast_graph_chain'));
 
     {
-      const call = await client.callTool({ name: 'set_repo', arguments: { path: repoDir } });
+      const call = await client.callTool({ name: 'get_repo', arguments: { path: repoDir } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.equal(parsed.ok, true);
@@ -106,15 +105,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'get_repo', arguments: {} });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.equal(parsed.ok, true);
-      assert.equal(await fs.realpath(parsed.repoRoot), repoRootReal);
-    }
-
-    {
-      const call = await client.callTool({ name: 'check_index', arguments: {} });
+      const call = await client.callTool({ name: 'check_index', arguments: { path: repoDir } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.equal(parsed.ok, true);
@@ -125,6 +116,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
       const call = await client.callTool({
         name: 'search_symbols',
         arguments: {
+          path: repoDir,
           query: 'hello',
           mode: 'substring',
           case_insensitive: true,
@@ -141,6 +133,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
       const call = await client.callTool({
         name: 'search_symbols',
         arguments: {
+          path: repoDir,
           query: 'hello',
           mode: 'substring',
           case_insensitive: true,
@@ -158,7 +151,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'semantic_search', arguments: { query: 'hello world', topk: 3 } });
+      const call = await client.callTool({ name: 'semantic_search', arguments: { path: repoDir, query: 'hello world', topk: 3 } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && Array.isArray(parsed.rows));
@@ -166,7 +159,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'repo_map', arguments: { max_files: 5, max_symbols: 2 } });
+      const call = await client.callTool({ name: 'repo_map', arguments: { path: repoDir, max_files: 5, max_symbols: 2 } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && parsed.repo_map && parsed.repo_map.enabled === true);
@@ -175,7 +168,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'list_files', arguments: { pattern: 'src/**/*', limit: 50 } });
+      const call = await client.callTool({ name: 'list_files', arguments: { path: repoDir, pattern: 'src/**/*', limit: 50 } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && Array.isArray(parsed.files));
@@ -183,7 +176,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'read_file', arguments: { file: 'src/foo.ts', start_line: 1, end_line: 20 } });
+      const call = await client.callTool({ name: 'read_file', arguments: { path: repoDir, file: 'src/foo.ts', start_line: 1, end_line: 20 } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && typeof parsed.text === 'string');
@@ -191,7 +184,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'ast_graph_query', arguments: { query: "?[file] := *ast_symbol{ref_id, file, lang, name: 'Foo', kind, signature, start_line, end_line}" } });
+      const call = await client.callTool({ name: 'ast_graph_query', arguments: { path: repoDir, query: "?[file] := *ast_symbol{ref_id, file, lang, name: 'Foo', kind, signature, start_line, end_line}" } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
@@ -199,7 +192,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'ast_graph_find', arguments: { prefix: 'Fo', limit: 10 } });
+      const call = await client.callTool({ name: 'ast_graph_find', arguments: { path: repoDir, prefix: 'Fo', limit: 10 } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
@@ -207,7 +200,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'ast_graph_children', arguments: { id: 'src/foo.ts', as_file: true } });
+      const call = await client.callTool({ name: 'ast_graph_children', arguments: { path: repoDir, id: 'src/foo.ts', as_file: true } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
@@ -215,7 +208,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'ast_graph_refs', arguments: { name: 'helloWorld', limit: 50 } });
+      const call = await client.callTool({ name: 'ast_graph_refs', arguments: { path: repoDir, name: 'helloWorld', limit: 50 } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
@@ -223,7 +216,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'ast_graph_callers', arguments: { name: 'helloWorld', limit: 50 } });
+      const call = await client.callTool({ name: 'ast_graph_callers', arguments: { path: repoDir, name: 'helloWorld', limit: 50 } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
@@ -231,7 +224,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'ast_graph_chain', arguments: { name: 'run', direction: 'downstream', max_depth: 2, limit: 200 } });
+      const call = await client.callTool({ name: 'ast_graph_chain', arguments: { path: repoDir, name: 'run', direction: 'downstream', max_depth: 2, limit: 200 } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
@@ -239,7 +232,7 @@ test('mcp server exposes set_repo and supports path arg', async () => {
     }
 
     {
-      const call = await client.callTool({ name: 'pack_index', arguments: { lfs: true } });
+      const call = await client.callTool({ name: 'pack_index', arguments: { path: repoDir, lfs: true } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.equal(parsed.ok, true);
@@ -249,43 +242,13 @@ test('mcp server exposes set_repo and supports path arg', async () => {
 
     {
       await fs.rm(path.join(repoDir, '.git-ai', 'lancedb'), { recursive: true, force: true });
-      const call = await client.callTool({ name: 'unpack_index', arguments: {} });
+      const call = await client.callTool({ name: 'unpack_index', arguments: { path: repoDir } });
       const text = String(call?.content?.[0]?.text ?? '');
       const parsed = text ? JSON.parse(text) : null;
       assert.equal(parsed.ok, true);
       const stat = await fs.stat(path.join(repoDir, '.git-ai', 'lancedb'));
       assert.ok(stat.isDirectory());
     }
-  } finally {
-    await transport.close();
-  }
-});
-
-test('mcp server supports --path on serve', async () => {
-  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
-  const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
-
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'git-ai-mcp-'));
-  const repoDir = await createRepo(tmp, 'repo', {
-    'src/foo.ts': 'export function foo() { return 1; }\n',
-  });
-  const repoRootReal = await fs.realpath(repoDir);
-
-  const transport = new StdioClientTransport({
-    command: 'node',
-    args: [CLI, 'ai', 'serve', '--path', repoDir],
-    stderr: 'ignore',
-  });
-
-  const client = new Client({ name: 'git-ai-test', version: '0.0.0' }, { capabilities: {} });
-
-  try {
-    await client.connect(transport);
-    const call = await client.callTool({ name: 'get_repo', arguments: {} });
-    const text = String(call?.content?.[0]?.text ?? '');
-    const parsed = text ? JSON.parse(text) : null;
-    assert.equal(parsed.ok, true);
-    assert.equal(await fs.realpath(parsed.repoRoot), repoRootReal);
   } finally {
     await transport.close();
   }

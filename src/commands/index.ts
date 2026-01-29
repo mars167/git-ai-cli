@@ -1,22 +1,32 @@
 import { Command } from 'commander';
 import path from 'path';
+import fs from 'fs-extra';
 import { inferScanRoot, resolveGitRoot } from '../core/git';
 import { IndexerV2 } from '../core/indexer';
 import { createLogger } from '../core/log';
+import { getStagedNameStatus, getWorktreeNameStatus } from '../core/gitDiff';
+import { IncrementalIndexerV2 } from '../core/indexerIncremental';
 
 export const indexCommand = new Command('index')
   .description('Build LanceDB+SQ8 index for the current repository (HEAD working tree)')
   .option('-p, --path <path>', 'Path inside the repository', '.')
   .option('-d, --dim <dim>', 'Embedding dimension', '256')
   .option('--overwrite', 'Overwrite existing tables', false)
+  .option('--incremental', 'Incremental indexing (only changed files)', false)
+  .option('--staged', 'Read changed file contents from Git index (staged)', false)
   .action(async (options) => {
     const log = createLogger({ component: 'cli', cmd: 'ai index' });
     const startedAt = Date.now();
     try {
       const repoRoot = await resolveGitRoot(path.resolve(options.path));
       const scanRoot = inferScanRoot(repoRoot);
-      const dim = Number(options.dim);
+      const requestedDim = Number(options.dim);
       const overwrite = Boolean(options.overwrite);
+      const incremental = Boolean((options as any).incremental ?? false);
+      const staged = Boolean((options as any).staged ?? false);
+      const metaPath = path.join(repoRoot, '.git-ai', 'meta.json');
+      const meta = await fs.readJSON(metaPath).catch(() => null);
+      const dim = typeof meta?.dim === 'number' ? meta.dim : requestedDim;
       const isTTY = Boolean(process.stderr.isTTY) && !process.env.CI;
       let renderedInTTY = false;
       let finishedInTTY = false;
@@ -49,11 +59,24 @@ export const indexCommand = new Command('index')
         }
       };
 
-      const indexer = new IndexerV2({ repoRoot, scanRoot, dim, overwrite, onProgress: renderProgress });
-      await indexer.run();
+      if (incremental) {
+        const changes = staged ? await getStagedNameStatus(repoRoot) : await getWorktreeNameStatus(repoRoot);
+        const indexer = new IncrementalIndexerV2({
+          repoRoot,
+          scanRoot,
+          dim,
+          source: staged ? 'staged' : 'worktree',
+          changes,
+          onProgress: renderProgress,
+        });
+        await indexer.run();
+      } else {
+        const indexer = new IndexerV2({ repoRoot, scanRoot, dim, overwrite, onProgress: renderProgress });
+        await indexer.run();
+      }
       if (renderedInTTY && !finishedInTTY) process.stderr.write('\n');
       log.info('index_repo', { ok: true, repoRoot, scanRoot, dim, overwrite, duration_ms: Date.now() - startedAt });
-      console.log(JSON.stringify({ ok: true, repoRoot, scanRoot, dim, overwrite }, null, 2));
+      console.log(JSON.stringify({ ok: true, repoRoot, scanRoot, dim, overwrite, incremental, staged }, null, 2));
     } catch (e) {
       log.error('index_repo', { ok: false, duration_ms: Date.now() - startedAt, err: e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : { message: String(e) } });
       process.exit(1);

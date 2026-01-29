@@ -10,6 +10,7 @@ import { packLanceDb, unpackLanceDb } from '../core/archive';
 import { defaultDbDir, openTablesByLang } from '../core/lancedb';
 import { ensureLfsTracking } from '../core/lfs';
 import { buildQueryVector, scoreAgainst } from '../core/search';
+import { IndexerV2 } from '../core/indexer';
 import { queryManifestWorkspace } from '../core/workspace';
 import { buildCallChainDownstreamByNameQuery, buildCallChainUpstreamByNameQuery, buildCalleesByNameQuery, buildCallersByNameQuery, buildChildrenQuery, buildFindReferencesQuery, buildFindSymbolsQuery, runAstGraphQuery } from '../core/astGraphQuery';
 import { buildCoarseWhere, filterAndRankSymbolRows, inferSymbolSearchMode, pickCoarseToken } from '../core/symbolSearch';
@@ -86,12 +87,18 @@ export class GitAIV2MCPServer {
         tools: [
           {
             name: 'get_repo',
-            description: 'Get current default repository root for this MCP server',
-            inputSchema: { type: 'object', properties: {} },
+            description: 'Resolve repository root and scan root for a given path. Risk: low (read-only).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+              },
+              required: ['path'],
+            },
           },
           {
             name: 'search_symbols',
-            description: 'Search symbols and return file locations (substring/prefix/wildcard/regex/fuzzy)',
+            description: 'Search symbols and return file locations (substring/prefix/wildcard/regex/fuzzy). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -100,24 +107,24 @@ export class GitAIV2MCPServer {
                 case_insensitive: { type: 'boolean', default: false },
                 max_candidates: { type: 'number', default: 1000 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 limit: { type: 'number', default: 50 },
                 with_repo_map: { type: 'boolean', default: false },
                 repo_map_max_files: { type: 'number', default: 20 },
                 repo_map_max_symbols: { type: 'number', default: 5 },
                 wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' },
               },
-              required: ['query'],
+              required: ['path', 'query'],
             },
           },
           {
             name: 'semantic_search',
-            description: 'Semantic search using SQ8 vectors stored in LanceDB (brute-force)',
+            description: 'Semantic search using SQ8 vectors stored in LanceDB (brute-force). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
                 query: { type: 'string' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 topk: { type: 'number', default: 10 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
                 with_repo_map: { type: 'boolean', default: false },
@@ -125,175 +132,182 @@ export class GitAIV2MCPServer {
                 repo_map_max_symbols: { type: 'number', default: 5 },
                 wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' },
               },
-              required: ['query'],
+              required: ['path', 'query'],
             },
           },
           {
             name: 'repo_map',
-            description: 'Generate a lightweight repository map (ranked files + top symbols + wiki links)',
+            description: 'Generate a lightweight repository map (ranked files + top symbols + wiki links). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 max_files: { type: 'number', default: 20 },
                 max_symbols: { type: 'number', default: 5 },
                 wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' },
-              },
-            },
-          },
-          {
-            name: 'check_index',
-            description: 'Check whether the repository index structure matches current expected schema',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
-              },
-            },
-          },
-          {
-            name: 'pack_index',
-            description: 'Pack .git-ai/lancedb into .git-ai/lancedb.tar.gz',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
-                lfs: { type: 'boolean', default: false, description: 'Run git lfs track for .git-ai/lancedb.tar.gz' },
-              },
-            },
-          },
-          {
-            name: 'unpack_index',
-            description: 'Unpack .git-ai/lancedb.tar.gz into .git-ai/lancedb',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
-              },
-            },
-          },
-          {
-            name: 'list_files',
-            description: 'List repository files by glob pattern',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
-                pattern: { type: 'string', default: '**/*' },
-                limit: { type: 'number', default: 500 },
-              },
-            },
-          },
-          {
-            name: 'read_file',
-            description: 'Read a repository file with optional line range',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: { type: 'string', description: 'Repository path (optional)' },
-                file: { type: 'string', description: 'File path relative to repo root' },
-                start_line: { type: 'number', default: 1 },
-                end_line: { type: 'number', default: 200 },
-              },
-              required: ['file'],
-            },
-          },
-          {
-            name: 'set_repo',
-            description: 'Set default repository path for subsequent tool calls',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                path: { type: 'string' },
               },
               required: ['path'],
             },
           },
           {
+            name: 'check_index',
+            description: 'Check whether the repository index structure matches current expected schema. Risk: low (read-only).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+              },
+              required: ['path'],
+            },
+          },
+          {
+            name: 'rebuild_index',
+            description: 'Rebuild full repository index under .git-ai (LanceDB + AST graph). Risk: high (writes .git-ai; can be slow).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+                dim: { type: 'number', default: 256 },
+                overwrite: { type: 'boolean', default: true },
+              },
+              required: ['path'],
+            },
+          },
+          {
+            name: 'pack_index',
+            description: 'Pack .git-ai/lancedb into .git-ai/lancedb.tar.gz. Risk: medium (writes archive; may touch git-lfs config).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+                lfs: { type: 'boolean', default: false, description: 'Run git lfs track for .git-ai/lancedb.tar.gz' },
+              },
+              required: ['path'],
+            },
+          },
+          {
+            name: 'unpack_index',
+            description: 'Unpack .git-ai/lancedb.tar.gz into .git-ai/lancedb. Risk: medium (writes .git-ai/lancedb).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+              },
+              required: ['path'],
+            },
+          },
+          {
+            name: 'list_files',
+            description: 'List repository files by glob pattern. Risk: low (read-only).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+                pattern: { type: 'string', default: '**/*' },
+                limit: { type: 'number', default: 500 },
+              },
+              required: ['path'],
+            },
+          },
+          {
+            name: 'read_file',
+            description: 'Read a repository file with optional line range. Risk: low (read-only).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+                file: { type: 'string', description: 'File path relative to repo root' },
+                start_line: { type: 'number', default: 1 },
+                end_line: { type: 'number', default: 200 },
+              },
+              required: ['path', 'file'],
+            },
+          },
+          {
             name: 'ast_graph_query',
-            description: 'Run a CozoScript query against the AST graph database (advanced)',
+            description: 'Run a CozoScript query against the AST graph database (advanced). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
                 query: { type: 'string' },
                 params: { type: 'object', default: {} },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['query'],
+              required: ['path', 'query'],
             },
           },
           {
             name: 'ast_graph_find',
-            description: 'Find symbols by name prefix (case-insensitive) using the AST graph',
+            description: 'Find symbols by name prefix (case-insensitive) using the AST graph. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
                 prefix: { type: 'string' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
                 limit: { type: 'number', default: 50 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
               },
-              required: ['prefix'],
+              required: ['path', 'prefix'],
             },
           },
           {
             name: 'ast_graph_children',
-            description: 'List direct children in the AST containment graph (file -> top-level symbols, class -> methods)',
+            description: 'List direct children in the AST containment graph (file -> top-level symbols, class -> methods). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
                 id: { type: 'string', description: 'Parent id (ref_id or file_id; or file path when as_file=true)' },
                 as_file: { type: 'boolean', default: false },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['id'],
+              required: ['path', 'id'],
             },
           },
           {
             name: 'ast_graph_refs',
-            description: 'Find reference locations by name (calls/new/type)',
+            description: 'Find reference locations by name (calls/new/type). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
                 name: { type: 'string' },
                 limit: { type: 'number', default: 200 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['name'],
+              required: ['path', 'name'],
             },
           },
           {
             name: 'ast_graph_callers',
-            description: 'Find callers by callee name',
+            description: 'Find callers by callee name. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
                 name: { type: 'string' },
                 limit: { type: 'number', default: 200 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['name'],
+              required: ['path', 'name'],
             },
           },
           {
             name: 'ast_graph_callees',
-            description: 'Find callees by caller name',
+            description: 'Find callees by caller name. Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
                 name: { type: 'string' },
                 limit: { type: 'number', default: 200 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['name'],
+              required: ['path', 'name'],
             },
           },
           {
             name: 'ast_graph_chain',
-            description: 'Compute call chain by symbol name (heuristic, name-based)',
+            description: 'Compute call chain by symbol name (heuristic, name-based). Risk: low (read-only).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -303,9 +317,9 @@ export class GitAIV2MCPServer {
                 limit: { type: 'number', default: 500 },
                 min_name_len: { type: 'number', default: 1 },
                 lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-                path: { type: 'string', description: 'Repository path (optional)' },
+                path: { type: 'string', description: 'Repository root path' },
               },
-              required: ['name'],
+              required: ['path', 'name'],
             },
           },
         ],
@@ -320,20 +334,12 @@ export class GitAIV2MCPServer {
       const startedAt = Date.now();
 
       const response = await (async () => {
+      if (typeof callPath !== 'string' || callPath.trim() === '') {
+        throw new Error('Missing required argument: path');
+      }
 
       if (name === 'get_repo') {
         const ctx = await this.openRepoContext(callPath);
-        const repoRoot = ctx.repoRoot;
-        const scanRoot = ctx.scanRoot;
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ ok: true, startDir: this.startDir, repoRoot, scanRoot }, null, 2) }],
-        };
-      }
-
-      if (name === 'set_repo') {
-        const p = String((args as any).path ?? '');
-        this.startDir = path.resolve(p);
-        const ctx = await this.openRepoContext(this.startDir);
         const repoRoot = ctx.repoRoot;
         const scanRoot = ctx.scanRoot;
         return {
@@ -347,6 +353,18 @@ export class GitAIV2MCPServer {
         return {
           content: [{ type: 'text', text: JSON.stringify({ repoRoot, ...res }, null, 2) }],
           isError: !res.ok,
+        };
+      }
+
+      if (name === 'rebuild_index') {
+        const { repoRoot, scanRoot, meta } = await this.openRepoContext(callPath);
+        const overwrite = Boolean((args as any).overwrite ?? true);
+        const dimOpt = Number((args as any).dim ?? 256);
+        const dim = typeof meta?.dim === 'number' ? meta.dim : dimOpt;
+        const indexer = new IndexerV2({ repoRoot, scanRoot, dim, overwrite });
+        await indexer.run();
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ ok: true, repoRoot, scanRoot, dim, overwrite }, null, 2) }],
         };
       }
 

@@ -76,7 +76,7 @@ git-ai ai hooks status
 git-ai ai serve
 ```
 
-If the host cannot guarantee the working directory points to the repository directory, you can let the Agent call `set_repo({path: ...})` first, or pass `path` in tool parameters.
+MCP tools require `path` in every tool call to select the target repository (atomic, no implicit defaults).
 
 ## Publishing Notes (npm)
 - Ensure `npm run build` has generated `dist/**`

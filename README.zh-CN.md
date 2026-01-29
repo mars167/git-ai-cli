@@ -57,10 +57,21 @@ git-ai ai index --overwrite
 git-ai ai query Indexer --limit 10
 git-ai ai semantic "semantic search" --topk 5
 git-ai ai graph find GitAIV2MCPServer
+git-ai ai dsr context --json
+git-ai ai dsr generate HEAD
+git-ai ai dsr rebuild-index
+git-ai ai dsr query symbol-evolution GitAIV2MCPServer --limit 200 --json
 git-ai ai pack
 git-ai ai unpack
 git-ai ai serve
 ```
+
+## DSR（Deterministic Semantic Record）
+
+DSR 是按提交（per-commit）、不可变、确定性的语义工件：
+
+- 规范文件：`.git-ai/dsr/<commit_hash>.json`
+- 数据库/索引仅为可删缓存，必须可由 DSR + Git 重建（永远不反向推断 Git DAG）
 
 ## MCP Server（stdio）
 
@@ -98,18 +109,14 @@ git-ai ai serve
 ```
 
 说明：
-- `git-ai ai serve` 默认使用当前目录作为仓库定位起点（类似 git 的用法）。
-- 若宿主无法保证 MCP 进程的工作目录（cwd）指向仓库目录，推荐由 Agent 在首次调用前先执行一次 `set_repo({path: \"/ABS/PATH/TO/REPO\"})`，或在每次 tool 调用里传 `path` 参数。
+- `git-ai ai serve` 仅负责启动 MCP stdio server。
+- MCP tools 的 `path` 为必传：每次 tool 调用都必须显式传 `path` 参数来选择目标仓库（调用原子化，无隐式默认）。
 
-## Agent Skills / Rules（Trae）
+## Agent 模版（skills/rules）
 
-本仓库提供了 Agent 可直接复用的 Skill/Rule 模版：
-- Skill： [./.trae/skills/git-ai-mcp/SKILL.md](./.trae/skills/git-ai-mcp/SKILL.md)
-- Rule： [./.trae/rules/git-ai-mcp/RULE.md](./.trae/rules/git-ai-mcp/RULE.md)
-
-使用方式：
-- 在 Trae 中打开本仓库后，Agent 会自动加载 `.trae/skills/**` 下的 Skill。
-- 需要给 Agent 加约束时，把 Rule 内容放到你的 Agent 配置/系统规则中（也可以直接引用本仓库的 `.trae/rules/**` 作为规范来源）。
+本仓库提供了可复用的 Skill/Rule 模版：
+- Skill： [templates/agents/common/skills/git-ai-mcp/SKILL.md](./templates/agents/common/skills/git-ai-mcp/SKILL.md)
+- Rule： [templates/agents/common/rules/git-ai-mcp/RULE.md](./templates/agents/common/rules/git-ai-mcp/RULE.md)
 
 一键安装到其它仓库：
 
@@ -117,7 +124,8 @@ git-ai ai serve
 cd /path/to/your-repo
 git-ai ai agent install
 git-ai ai agent install --overwrite
-git-ai ai agent install --to /custom/location/.trae
+git-ai ai agent install --to /custom/location/.agents
+git-ai ai agent install --agent trae
 ```
 
 ## Git hooks（提交前重建索引，push 前打包校验，checkout 自动解包）
@@ -130,7 +138,7 @@ git-ai ai hooks status
 ```
 
 说明：
-- `pre-commit`：自动 `index --overwrite` + `pack`，并把 `.git-ai/meta.json` 与 `.git-ai/lancedb.tar.gz` 加入暂存区。
+- `pre-commit`：自动 `index --incremental --staged` + `pack`，并把 `.git-ai/meta.json` 与 `.git-ai/lancedb.tar.gz` 加入暂存区（索引内容以 staged 为准）。
 - `pre-push`：再次 `pack`，若归档发生变化则阻止 push，提示先提交归档文件。
 - `post-checkout` / `post-merge`：若存在 `.git-ai/lancedb.tar.gz` 则自动 `unpack`。
 
