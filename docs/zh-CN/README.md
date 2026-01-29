@@ -37,6 +37,7 @@
 - [DSR（Deterministic Semantic Record）](./dsr.md)
 
 ### 进阶与原理
+- [技术细节详解](./technical-details.md)
 - [进阶：索引归档与 LFS](./advanced.md)
 - [架构设计](./design.md)
 - [开发规则](./rules.md)
