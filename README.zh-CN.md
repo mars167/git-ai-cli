@@ -168,7 +168,7 @@ Claude 会自动调用 git-ai 的工具，为你提供深入的分析。*让 AI 
 
 ```mermaid
 graph TB
-    A[Git 仓库] -->|每次提交| B[DSR (Deterministic Semantic Record)]
+    A[Git 仓库] -->|每次提交| B["DSR (Deterministic Semantic Record)"]
     B --> C[.git-ai/dsr/<commit>.json<br/>语义快照]
     C -->|索引重建| D[LanceDB 向量库]
     C -->|索引重建| E[CozoDB 图数据库]
