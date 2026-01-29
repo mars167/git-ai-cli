@@ -39,6 +39,43 @@ git-ai ai serve
 - `list_files({ path, pattern?, limit? })`：按 glob 列文件（默认忽略 node_modules, .git 等）
 - `read_file({ path, file, start_line?, end_line? })`：按行读取文件片段
 
+### DSR (Deterministic Semantic Record)
+- `dsr_context({ path })`：获取仓库 Git 上下文和 DSR 目录状态
+  - 返回：commit_hash, repo_root, branch, detached, dsr_directory_state
+- `dsr_generate({ path, commit })`：为指定提交生成 DSR
+  - 返回：commit_hash, file_path, existed, counts, semantic_change_type, risk_level
+- `dsr_rebuild_index({ path })`：从 DSR 文件重建索引，加速查询
+  - 返回：enabled, engine, dbPath, counts
+- `dsr_symbol_evolution({ path, symbol, start?, all?, limit?, contains? })`：追溯符号变更历史
+  - 返回：ok, hits（包含 commit_hash, semantic_change_type, risk_level, operations）
+
+## DSR 使用示例
+
+获取仓库 Git 状态和 DSR 情况：
+
+```js
+dsr_context({ path: "/ABS/PATH/TO/REPO" })
+```
+
+为最近几次提交生成 DSR：
+
+```js
+dsr_generate({ path: "/ABS/PATH/TO/REPO", commit: "HEAD" })
+dsr_generate({ path: "/ABS/PATH/TO/REPO", commit: "HEAD~1" })
+```
+
+查询某个函数的变更历史：
+
+```js
+dsr_symbol_evolution({ path: "/ABS/PATH/TO/REPO", symbol: "handleRequest", limit: 50 })
+```
+
+模糊匹配符号名称：
+
+```js
+dsr_symbol_evolution({ path: "/ABS/PATH/TO/REPO", symbol: "Request", contains: true, limit: 100 })
+```
+
 ## AST 图查询示例
 
 列出指定文件里的顶层符号（推荐：无需手动算 file_id）：
@@ -119,37 +156,40 @@ git-ai ai agent install --agent trae
 
 根据 `skill.yaml`，推荐的工作流程：
 
-1. **绑定仓库** (`bind_repo`) - 确保仓库已绑定
-2. **确保索引新鲜** (`ensure_index`) - 必要时重建索引
-3. **定位符号** (`locate_symbols`) - 使用 `search_symbols` 精确查找
-4. **语义搜索** (`semantic_search`) - 自然语言描述搜索
-5. **浏览文件** (`browse_files`) - 使用 `list_files` 查找文件
-6. **AST 查询** (`ast_query`) - 递归/关系类查询
-7. **读取代码** (`read_code`) - 使用 `read_file` 读取关键片段
+1. **首次接触仓库** - 使用 `repo_map` 获取全局视图
+2. **检查索引状态** - 使用 `check_index`，必要时 `rebuild_index`
+3. **定位目标代码** - 使用 `search_symbols` 或 `semantic_search`
+4. **理解代码关系** - 使用 `ast_graph_callers/callees/chain`
+5. **追溯变更历史** - 使用 `dsr_symbol_evolution`
+6. **精读代码** - 使用 `read_file` 读取关键片段
+7. **提供建议** - 基于完整理解给出修改建议
 
 ### Rule 约束概览
 
 根据 `rule.yaml`，Agent 必须遵守：
 
-- **bind_repo_first**: 先绑定仓库再操作
-- **index_before_search**: 搜索无结果时先重建索引
-- **evidence_based_conclusion**: 结论必须有证据（文件+行号）
-- **path_safety**: 禁止读取仓库外路径
-- **storage_cost_evaluation**: 评估存储成本
+- **explicit_path**: 每次调用必须显式传 `path` 参数
+- **check_index_first**: 符号搜索前必须检查索引
+- **understand_before_modify**: 修改前必须先理解实现
+- **use_dsr_for_history**: 追溯历史必须使用 DSR 工具
+- **respect_dsr_risk**: 重视 DSR 报告的 high 风险变更
 
 禁止事项包括：
-- 默认使用外部 embedding 服务
-- 直接提交 `.git-ai/lancedb/` 目录
-- 使用 `../` 读取外部文件
-- 假设索引是最新的而不检查
+- 假设符号位置而不搜索
+- 直接修改未读过的文件
+- 手动解析 git 历史
+- 在索引缺失时进行符号搜索
+- 省略 `path` 参数
 
 ## DSR 与 MCP 的关系
 
-- MCP tools 主要覆盖“索引（.git-ai）构建与检索”，用于让 Agent 低成本定位证据
-- DSR 是“按提交的语义工件（.git-ai/dsr）”，用于语义历史/演化类查询与可重建缓存
+- **MCP tools** 主要覆盖"索引（.git-ai）构建与检索"，用于让 Agent 低成本定位证据
+- **DSR** 是"按提交的语义工件（.git-ai/dsr）"，用于语义历史/演化类查询
+- DSR 是 per-commit、immutable、deterministic 的，可用于精确追溯符号变更
 - 任何历史遍历都必须从 Git DAG 出发（DSR 只 enrich 节点，不定义边）
 
 DSR 相关命令见：[DSR 文档](./dsr.md)
+
 ## 输出要求
 
 Agent 使用 git-ai MCP 工具时应遵循：

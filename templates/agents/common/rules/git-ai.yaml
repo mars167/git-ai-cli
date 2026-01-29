@@ -1,165 +1,141 @@
-name: trae-dsr
+name: git-ai-mcp
 version: "2.0.0"
 description: |
-  Non-negotiable constraints for a Git-native, decentralized semantic indexing system.
-  Enforces DSR determinism/immutability, canonical-vs-cache boundaries, and Git DAG authority.
-
-global_invariants:
-  - "Git commit DAG is authoritative for history and branches."
-  - "DSR is per-commit, immutable, deterministic."
-  - "DSR files are canonical artifacts; databases are rebuildable caches."
-  - "Never infer Git topology from semantic data."
-
-precedence:
-  conflict_resolution_order:
-    - git
-    - dsr
-    - database
-    - heuristics
-
-canonical_artifacts:
-  dsr:
-    directory: ".git-ai/dsr"
-    file_pattern: "<commit_hash>.json"
-    rules:
-      - "One commit → one DSR file."
-      - "DSR file must be immutable once generated."
-
-cli_entrypoints:
-  dsr:
-    - "git-ai ai dsr context --json"
-    - "git-ai ai dsr generate <commit>"
-    - "git-ai ai dsr rebuild-index"
-    - "git-ai ai dsr query symbol-evolution <symbol> --json"
-
-dsr_schema:
-  required_fields:
-    - commit_hash
-    - affected_symbols
-    - ast_operations
-    - semantic_change_type
-  optional_fields:
-    - summary
-    - risk_level
-  forbidden_fields:
-    - parent_commits
-    - branch_names
-    - timestamps_beyond_commit_time
-    - merge_topology
+  Agent 使用 git-ai MCP 工具的行为约束。
+  确保 Agent 高效、安全、准确地帮助开发者理解和修改代码。
 
 must_follow:
-  - id: git_is_authority
+  - id: explicit_path
     severity: error
     rule: |
-      Use Git commands to determine repo root, HEAD, branch, and history.
-      Never infer branches/parents/topology from semantic artifacts.
+      每次 MCP 工具调用必须显式传 path 参数。
+      禁止依赖进程状态或工作目录隐式推断仓库位置。
 
-  - id: do_not_parse_git_internals
+  - id: check_index_first
     severity: error
     rule: |
-      Do not parse .git internals manually.
-      Use git rev-parse / git show / git log / git diff.
+      使用 search_symbols、semantic_search、ast_graph_* 前，
+      必须先调用 check_index 确认索引就绪。
+      索引不兼容时必须重建，禁止在索引缺失时进行符号搜索。
 
-  - id: per_commit_scope_only
+  - id: understand_before_modify
     severity: error
     rule: |
-      For a given commit, analyze only the snapshot defined by that commit.
-      Do not inspect future commits.
+      修改代码前必须先理解现有实现。
+      流程：search_symbols 定位 → read_file 精读 → ast_graph_callers 确认影响范围 → 修改。
+      禁止直接修改未读过的文件。
 
-  - id: dsr_determinism
-    severity: error
+  - id: use_dsr_for_history
+    severity: warning
     rule: |
-      DSR generation must be deterministic: same inputs produce identical DSR output.
-      No randomness, no time-based or environment-based variance.
+      追溯符号变更历史必须使用 dsr_symbol_evolution。
+      禁止手动解析 git log 或 diff 来推断符号变更。
 
-  - id: dsr_immutability
-    severity: error
+  - id: repo_map_before_large_change
+    severity: warning
     rule: |
-      Once written, a DSR file must not be modified.
-      If regeneration is necessary, treat it as a system error and stop.
+      大型变更前必须使用 repo_map 确认影响范围。
+      了解项目结构、关键文件、主要符号后再规划修改。
 
-  - id: cache_is_derivable
-    severity: error
+  - id: respect_dsr_risk
+    severity: warning
     rule: |
-      Databases and indexes are caches only.
-      Every semantic fact stored in any database must be derivable from DSR + Git.
+      DSR 报告 risk_level 为 high 的变更必须谨慎对待。
+      涉及 delete、rename 操作的变更需要额外审查。
 
-  - id: read_only_query
-    severity: error
+recommended:
+  - id: prefer_semantic_search
     rule: |
-      Query execution is read-only with respect to DSR.
-      DSR enriches commit nodes; it never defines DAG edges.
+      理解功能意图时优先使用 semantic_search，
+      精确定位时使用 search_symbols。
 
-if_data_missing:
-  - "Rebuild caches from DSR."
-  - "If DSR missing, report and stop (do NOT infer)."
+  - id: use_call_chain_for_complex_flow
+    rule: |
+      复杂调用链路使用 ast_graph_chain 追踪，
+      避免手动递归查找 callers/callees。
+
+  - id: incremental_dsr_generation
+    rule: |
+      需要历史分析时，按需生成 DSR，
+      避免一次性生成所有历史提交的 DSR。
+
+  - id: attach_repo_map_for_context
+    rule: |
+      复杂查询可附带 repo_map，
+      帮助建立全局上下文。
 
 prohibited:
-  - action: "Inferring Git parents/branches/topology from semantic data"
-    reason: "Git DAG is authoritative; semantics may only enrich nodes"
+  - action: "假设符号位置而不搜索"
+    reason: "必须通过 search_symbols 或 semantic_search 确认符号位置"
 
-  - action: "Writing semantic facts only into a database"
-    reason: "Databases must be derivable caches; DSR is canonical"
+  - action: "直接修改未读过的文件"
+    reason: "必须先 read_file 理解实现，避免破坏性变更"
 
-  - action: "Including parent commits or branch names in DSR"
-    reason: "DSR must not encode merge topology or branch structure"
+  - action: "手动解析 git 历史"
+    reason: "必须使用 dsr_symbol_evolution 追溯符号变更"
 
-  - action: "Mutating an existing DSR file"
-    reason: "DSR must be immutable once generated"
+  - action: "在索引缺失时进行符号搜索"
+    reason: "索引是符号搜索的前提，缺失时必须重建"
 
-phases:
-  phase_0:
-    name: "Context Discovery"
-    must_produce:
-      - commit_hash
-      - repo_root
-      - dsr_directory_state
-    tools:
-      - "git rev-parse"
-      - "git show"
-      - "git log"
-      - "filesystem inspection"
+  - action: "忽略 DSR 风险等级"
+    reason: "high 风险变更需要额外审查，不能盲目应用"
 
-  phase_1:
-    name: "Commit Semantic Extraction"
-    tools:
-      - "git diff <parent> <commit>"
-      - "language parser → AST"
-      - "AST diff engine"
-      - "semantic rules engine"
-    must_produce:
-      - ast_diff
-      - symbol_level_operations
+  - action: "省略 path 参数"
+    reason: "每次调用必须显式传 path，保证原子性和可复现性"
 
-  phase_2:
-    name: "DSR Generation"
-    output_path: ".git-ai/dsr/<commit_hash>.json"
+tool_usage_constraints:
+  repo_map:
+    when: "首次接触仓库、大型变更前"
+    must_pass: ["path"]
 
-  phase_3:
-    name: "Cache / Index Materialization"
-    tools:
-      - "SQLite / CozoDB"
-      - "LanceDB"
+  check_index:
+    when: "任何符号搜索前"
+    must_pass: ["path"]
 
-  phase_4:
-    name: "Versioning & Distribution"
-    tools:
-      - "Git LFS"
-      - "pre-commit / pre-push hooks"
-    must_hold:
-      - "DSR files are Git-visible."
-      - "No central service required."
+  rebuild_index:
+    when: "索引不兼容或缺失时"
+    must_pass: ["path"]
+    note: "可能耗时较长，大型仓库谨慎使用"
 
-  phase_5:
-    name: "Clone / Pull / Checkout Handling"
-    rules:
-      - "Never persist checkout-specific state into DSR."
-      - "Git DAG traversal always comes first."
+  search_symbols:
+    when: "按名称查找符号"
+    must_pass: ["path", "query"]
+    precheck: "check_index 必须通过"
 
-  phase_6:
-    name: "Query Execution"
-    supported_queries:
-      - semantic_blame
-      - semantic_diff
-      - symbol_evolution
-      - semantic_search
+  semantic_search:
+    when: "按语义查找代码"
+    must_pass: ["path", "query"]
+    precheck: "check_index 必须通过"
+
+  ast_graph_callers:
+    when: "查找调用者"
+    must_pass: ["path", "name"]
+    precheck: "check_index 必须通过"
+
+  ast_graph_callees:
+    when: "查找被调用者"
+    must_pass: ["path", "name"]
+    precheck: "check_index 必须通过"
+
+  ast_graph_chain:
+    when: "追踪调用链"
+    must_pass: ["path", "name"]
+    precheck: "check_index 必须通过"
+
+  dsr_context:
+    when: "了解仓库 Git 状态和 DSR 情况"
+    must_pass: ["path"]
+
+  dsr_generate:
+    when: "为特定提交生成 DSR"
+    must_pass: ["path", "commit"]
+
+  dsr_symbol_evolution:
+    when: "追溯符号变更历史"
+    must_pass: ["path", "symbol"]
+    precheck: "相关提交的 DSR 必须已生成"
+
+  read_file:
+    when: "精读代码"
+    must_pass: ["path", "file"]
+    note: "建议结合 start_line/end_line 限制范围"
