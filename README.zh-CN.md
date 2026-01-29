@@ -174,9 +174,9 @@ graph TB
     C -->|索引重建| E[CozoDB 图数据库]
     D --> F[MCP Server]
     E --> F
-    F -->|工具调用| G[AI Agent<br/>Claude Desktop / Trae]
+    F -->|工具调用| G["AI Agent<br/>Claude Desktop / Trae"]
     F -->|命令行| H[开发者]
-    C -->|跨版本| I{语义时间线<br/>可追溯、可比对、可演进}
+    C -->|跨版本| I{"语义时间线<br/>可追溯、可比对、可演进"}
     
     style B fill:#e1f5ff
     style C fill:#e8f5e9
