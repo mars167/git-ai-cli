@@ -19,6 +19,11 @@ import { toPosixPath } from '../core/paths';
 import { createLogger } from '../core/log';
 import { checkIndex, resolveLangs } from '../core/indexCheck';
 import { generateRepoMap, type FileRank } from '../core/repoMap';
+import { detectRepoGitContext } from '../core/dsr/gitContext';
+import { generateDsrForCommit } from '../core/dsr/generate';
+import { materializeDsrIndex } from '../core/dsr/indexMaterialize';
+import { symbolEvolution } from '../core/dsr/query';
+import { getDsrDirectoryState } from '../core/dsr/state';
 
 export interface GitAIV2MCPServerOptions {
   disableAccessLog?: boolean;
@@ -33,7 +38,7 @@ export class GitAIV2MCPServer {
     this.startDir = path.resolve(startDir);
     this.options = options;
     this.server = new Server(
-      { name: 'git-ai-v2', version: '1.1.2' },
+      { name: 'git-ai-v2', version: '2.0.0' },
       { capabilities: { tools: {} } }
     );
     this.setupHandlers();
@@ -322,6 +327,56 @@ export class GitAIV2MCPServer {
               required: ['path', 'name'],
             },
           },
+          {
+            name: 'dsr_context',
+            description: 'Get repository Git context and DSR directory state. Risk: low (read-only).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+              },
+              required: ['path'],
+            },
+          },
+          {
+            name: 'dsr_generate',
+            description: 'Generate DSR (Deterministic Semantic Record) for a specific commit. Risk: medium (writes .git-ai/dsr).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+                commit: { type: 'string', description: 'Commit hash or ref' },
+              },
+              required: ['path', 'commit'],
+            },
+          },
+          {
+            name: 'dsr_rebuild_index',
+            description: 'Rebuild DSR index from DSR files for faster queries. Risk: medium (writes .git-ai/dsr-index).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+              },
+              required: ['path'],
+            },
+          },
+          {
+            name: 'dsr_symbol_evolution',
+            description: 'Query symbol evolution history across commits using DSR. Risk: low (read-only).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Repository root path' },
+                symbol: { type: 'string', description: 'Symbol name to query' },
+                start: { type: 'string', description: 'Start commit (default: HEAD)' },
+                all: { type: 'boolean', default: false, description: 'Traverse all refs instead of just HEAD' },
+                limit: { type: 'number', default: 200, description: 'Max commits to traverse' },
+                contains: { type: 'boolean', default: false, description: 'Match by substring instead of exact' },
+              },
+              required: ['path', 'symbol'],
+            },
+          },
         ],
       };
     });
@@ -344,6 +399,67 @@ export class GitAIV2MCPServer {
         const scanRoot = ctx.scanRoot;
         return {
           content: [{ type: 'text', text: JSON.stringify({ ok: true, startDir: this.startDir, repoRoot, scanRoot }, null, 2) }],
+        };
+      }
+
+      if (name === 'dsr_context') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const ctx = await detectRepoGitContext(repoRoot);
+        const state = await getDsrDirectoryState(ctx.repo_root);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({
+            ok: true,
+            commit_hash: ctx.head_commit,
+            repo_root: ctx.repo_root,
+            branch: ctx.branch,
+            detached: ctx.detached,
+            dsr_directory_state: state,
+          }, null, 2) }],
+        };
+      }
+
+      if (name === 'dsr_generate') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const commit = String((args as any).commit ?? 'HEAD');
+        const res = await generateDsrForCommit(repoRoot, commit);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({
+            ok: true,
+            commit_hash: res.dsr.commit_hash,
+            file_path: res.file_path,
+            existed: res.existed,
+            counts: {
+              affected_symbols: res.dsr.affected_symbols.length,
+              ast_operations: res.dsr.ast_operations.length,
+            },
+            semantic_change_type: res.dsr.semantic_change_type,
+            risk_level: res.dsr.risk_level,
+          }, null, 2) }],
+        };
+      }
+
+      if (name === 'dsr_rebuild_index') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const res = await materializeDsrIndex(repoRoot);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot, ...res }, null, 2) }],
+          isError: !res.enabled,
+        };
+      }
+
+      if (name === 'dsr_symbol_evolution') {
+        const repoRoot = await this.resolveRepoRoot(callPath);
+        const symbol = String((args as any).symbol ?? '');
+        const opts = {
+          start: (args as any).start ? String((args as any).start) : undefined,
+          all: Boolean((args as any).all ?? false),
+          limit: Number((args as any).limit ?? 200),
+          contains: Boolean((args as any).contains ?? false),
+        };
+        const res = await symbolEvolution(repoRoot, symbol, opts);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ repoRoot, symbol, ...res }, null, 2) }],
+          isError: !res.ok,
         };
       }
 
