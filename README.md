@@ -168,15 +168,15 @@ Claude will automatically invoke git-ai tools to provide deep analysis. *Enablin
 
 ```mermaid
 graph TB
-    A[Git Repository] -->|On Commit| B[DSR (Deterministic Semantic Record)]
-    B --> C[.git-ai/dsr/<commit>.json<br/>Semantic Snapshot]
+    A[Git Repository] -->|On Commit| B["DSR (Deterministic Semantic Record)"]
+    B --> C[".git-ai/dsr/<commit>.json<br/>Semantic Snapshot"]
     C -->|Index Rebuild| D[LanceDB Vector DB]
     C -->|Index Rebuild| E[CozoDB Graph DB]
     D --> F[MCP Server]
     E --> F
-    F -->|Tool Call| G[AI Agent<br/>Claude Desktop / Trae]
+    F -->|Tool Call| G["AI Agent<br/>Claude Desktop / Trae"]
     F -->|CLI| H[Developer]
-    C -->|Cross-Version| I{Semantic Timeline<br/>Traceable, Comparable, Evolvable}
+    C -->|Cross-Version| I{"Semantic Timeline<br/>Traceable, Comparable, Evolvable"}
     
     style B fill:#e1f5ff
     style C fill:#e8f5e9

@@ -168,15 +168,15 @@ Claude 会自动调用 git-ai 的工具，为你提供深入的分析。*让 AI 
 
 ```mermaid
 graph TB
-    A[Git 仓库] -->|每次提交| B[DSR (Deterministic Semantic Record)]
+    A[Git 仓库] -->|每次提交| B["DSR (Deterministic Semantic Record)"]
     B --> C[.git-ai/dsr/<commit>.json<br/>语义快照]
     C -->|索引重建| D[LanceDB 向量库]
     C -->|索引重建| E[CozoDB 图数据库]
     D --> F[MCP Server]
     E --> F
-    F -->|工具调用| G[AI Agent<br/>Claude Desktop / Trae]
+    F -->|工具调用| G["AI Agent<br/>Claude Desktop / Trae"]
     F -->|命令行| H[开发者]
-    C -->|跨版本| I{语义时间线<br/>可追溯、可比对、可演进}
+    C -->|跨版本| I{"语义时间线<br/>可追溯、可比对、可演进"}
     
     style B fill:#e1f5ff
     style C fill:#e8f5e9
