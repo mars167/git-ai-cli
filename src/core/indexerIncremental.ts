@@ -10,6 +10,7 @@ import { removeFileFromAstGraph, writeAstGraphToCozo } from './astGraph';
 import { ChunkRow, RefRow } from './types';
 import { GitDiffPathChange } from './gitDiff';
 import { SnapshotCodeParser } from './dsr/snapshotParser';
+import { getCurrentCommitHash } from './git';
 
 export interface IncrementalIndexOptions {
   repoRoot: string;
@@ -286,6 +287,7 @@ export class IncrementalIndexerV2 {
 
     const metaPath = path.join(gitAiDir, 'meta.json');
     const prev = await fs.readJSON(metaPath).catch(() => null);
+    const commitHash = await getCurrentCommitHash(this.repoRoot);
     const meta = {
       ...(prev && typeof prev === 'object' ? prev : {}),
       version: '2.1',
@@ -295,6 +297,7 @@ export class IncrementalIndexerV2 {
       scanRoot: path.relative(this.repoRoot, this.scanRoot),
       languages: ALL_INDEX_LANGS,
       byLang: addedByLang,
+      ...(commitHash ? { commit_hash: commitHash } : {}),
       astGraph: astGraph.enabled
         ? {
           backend: 'cozo',
