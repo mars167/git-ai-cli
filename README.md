@@ -80,6 +80,8 @@ Supports multiple mainstream programming languages:
 | Go | `.go` |
 | Rust | `.rs` |
 | C | `.c`, `.h` |
+| Markdown | `.md`, `.mdx` |
+| YAML | `.yml`, `.yaml` |
 
 ---
 
@@ -168,23 +170,22 @@ Claude will automatically invoke git-ai tools to provide deep analysis. *Enablin
 
 ```mermaid
 graph TB
-    A[Git Repository] -->|On Commit| B["DSR (Deterministic Semantic Record)"]
-    B --> C[".git-ai/dsr/<commit>.json<br/>Semantic Snapshot"]
-    C -->|Index Rebuild| D[LanceDB Vector DB]
-    C -->|Index Rebuild| E[CozoDB Graph DB]
+    A[Git Repository] -->|On Commit| B[DSR\nDeterministic Semantic Record]
+    B --> C[.git-ai/dsr/commit.json\nSemantic Snapshot]
+    C -->|Index Rebuild| D[LanceDB\nVector Database]
+    C -->|Index Rebuild| E[CozoDB\nGraph Database]
     D --> F[MCP Server]
     E --> F
-    F -->|Tool Call| G["AI Agent<br/>Claude Desktop / Trae"]
+    F -->|Tool Call| G[AI Agent\nClaude Desktop / Trae]
     F -->|CLI| H[Developer]
-    C -->|Cross-Version| I{"Semantic Timeline<br/>Traceable, Comparable, Evolvable"}
-    
-    style B fill:#e1f5ff
-    style C fill:#e8f5e9
-    style D fill:#fff4e1
-    style E fill:#fff4e1
-    style F fill:#e8f5e9
-    style G fill:#f3e5f5
-    style I fill:#fce4ec
+    C -->|Cross-Version| I[Semantic Timeline\nTraceable · Comparable · Evolvable]
+    style B fill:#e1f5ff,stroke:#333
+    style C fill:#e8f5e9,stroke:#333
+    style D fill:#fff4e1,stroke:#333
+    style E fill:#fff4e1,stroke:#333
+    style F fill:#e8f5e9,stroke:#333
+    style G fill:#f3e5f5,stroke:#333
+    style I fill:#fce4ec,stroke:#333
 ```
 
 **Core Components**:
@@ -295,6 +296,8 @@ We provide carefully designed Agent templates to help AI use git-ai better:
 
 - [Skill Template](./templates/agents/common/skills/git-ai-mcp/SKILL.md): Guides Agents on how to use tools
 - [Rule Template](./templates/agents/common/rules/git-ai-mcp/RULE.md): Constrains Agent behavior
+
+Skills/Rules docs (Markdown/YAML) are indexed as part of semantic search, so agents can retrieve MCP guidance via `semantic_search`.
 
 One-click install to your project:
 

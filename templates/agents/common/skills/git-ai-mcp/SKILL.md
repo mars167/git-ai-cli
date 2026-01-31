@@ -14,6 +14,7 @@
 4. **变更历史追溯** - 使用 `dsr_symbol_evolution` 追踪符号演变
 5. **代码精读** - 使用 `read_file` 深入理解关键代码片段
 6. **索引管理** - 按需重建索引，确保检索准确性
+7. **文档/规则检索** - 索引 Markdown/YAML 文档（含 skills/rules 模板）并支持语义检索
 
 ## 推荐工作流
 
@@ -47,6 +48,12 @@ search_symbols({ path: "/ABS/PATH/TO/REPO", query: "handleRequest", mode: "subst
 
 ```js
 semantic_search({ path: "/ABS/PATH/TO/REPO", query: "用户认证逻辑在哪里", topk: 10 })
+```
+
+查找文档/规则说明：
+
+```js
+semantic_search({ path: "/ABS/PATH/TO/REPO", query: "MCP 规则约束", topk: 10, lang: "markdown" })
 ```
 
 ### 4. 理解代码关系
@@ -100,6 +107,7 @@ read_file({ path: "/ABS/PATH/TO/REPO", file: "src/auth.ts", start_line: 1, end_l
 | 了解项目结构 | `repo_map` | `path`, `max_files`, `max_symbols` |
 | 按名称查找符号 | `search_symbols` | `path`, `query`, `mode`, `limit` |
 | 按语义查找代码 | `semantic_search` | `path`, `query`, `topk` |
+| 查找文档/规则 | `semantic_search` | `path`, `query`, `topk`, `lang: "markdown"|"yaml"` |
 | 查找调用者 | `ast_graph_callers` | `path`, `name`, `limit` |
 | 查找被调用者 | `ast_graph_callees` | `path`, `name`, `limit` |
 | 追踪调用链 | `ast_graph_chain` | `path`, `name`, `direction`, `max_depth` |

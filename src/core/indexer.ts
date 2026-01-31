@@ -41,6 +41,8 @@ function buildChunkText(file: string, symbol: { name: string; kind: string; sign
 }
 
 function inferIndexLang(file: string): IndexLang {
+  if (file.endsWith('.md') || file.endsWith('.mdx')) return 'markdown';
+  if (file.endsWith('.yml') || file.endsWith('.yaml')) return 'yaml';
   if (file.endsWith('.java')) return 'java';
   if (file.endsWith('.c') || file.endsWith('.h')) return 'c';
   if (file.endsWith('.go')) return 'go';
@@ -73,7 +75,7 @@ export class IndexerV2 {
 
     const aiIgnore = await loadIgnorePatterns(this.repoRoot, '.aiignore');
     const gitIgnore = await loadIgnorePatterns(this.repoRoot, '.gitignore');
-    const files = await glob('**/*.{ts,tsx,js,jsx,java,c,h,go,py,rs}', {
+    const files = await glob('**/*.{ts,tsx,js,jsx,java,c,h,go,py,rs,md,mdx,yml,yaml}', {
       cwd: this.scanRoot,
       nodir: true,
       ignore: [

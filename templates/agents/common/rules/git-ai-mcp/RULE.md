@@ -12,6 +12,10 @@ Agent 使用 git-ai MCP 工具的行为约束。
 - **级别**: error
 - **规则**: 使用 `search_symbols`、`semantic_search`、`ast_graph_*` 前，必须先调用 `check_index` 确认索引就绪。索引不兼容时必须重建，禁止在索引缺失时进行符号搜索。
 
+### doc_index_scope
+- **级别**: warning
+- **规则**: 文档与规则模板已纳入索引（Markdown/YAML）。涉及 MCP、Skill、Rule 等问题时，优先使用 `semantic_search` 检索相关文档，再给出结论。
+
 ### understand_before_modify
 - **级别**: error
 - **规则**: 修改代码前必须先理解现有实现。流程：`search_symbols` 定位 → `read_file` 精读 → `ast_graph_callers` 确认影响范围 → 修改。禁止直接修改未读过的文件。

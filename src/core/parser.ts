@@ -8,6 +8,8 @@ import { CAdapter } from './parser/c';
 import { GoAdapter } from './parser/go';
 import { PythonAdapter } from './parser/python';
 import { RustAdapter } from './parser/rust';
+import { parseMarkdown } from './parser/markdown';
+import { parseYaml } from './parser/yaml';
 
 export class CodeParser {
   private parser: Parser;
@@ -28,6 +30,8 @@ export class CodeParser {
 
   async parseFile(filePath: string): Promise<ParseResult> {
     const content = await fs.readFile(filePath, 'utf-8');
+    if (isMarkdownFile(filePath)) return parseMarkdown(content, filePath);
+    if (isYamlFile(filePath)) return parseYaml(content, filePath);
     const adapter = this.pickAdapter(filePath);
     if (!adapter) return { symbols: [], refs: [] };
 
@@ -57,4 +61,12 @@ export class CodeParser {
     }
     return null;
   }
+}
+
+function isMarkdownFile(filePath: string): boolean {
+  return filePath.endsWith('.md') || filePath.endsWith('.mdx');
+}
+
+function isYamlFile(filePath: string): boolean {
+  return filePath.endsWith('.yml') || filePath.endsWith('.yaml');
 }

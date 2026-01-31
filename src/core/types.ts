@@ -1,12 +1,14 @@
+export type SymbolKind = 'function' | 'class' | 'method' | 'section' | 'document' | 'node';
+
 export interface SymbolInfo {
   name: string;
-  kind: 'function' | 'class' | 'method';
+  kind: SymbolKind;
   startLine: number;
   endLine: number;
   signature: string;
   container?: {
     name: string;
-    kind: 'function' | 'class' | 'method';
+    kind: SymbolKind;
     startLine: number;
     endLine: number;
     signature: string;

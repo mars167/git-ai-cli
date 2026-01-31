@@ -80,6 +80,8 @@ git-ai ai dsr context
 | Go | `.go` |
 | Rust | `.rs` |
 | C | `.c`, `.h` |
+| Markdown | `.md`, `.mdx` |
+| YAML | `.yml`, `.yaml` |
 
 ---
 
@@ -295,6 +297,8 @@ Claude 会自动调用 git-ai 的工具，为你提供深入的分析。
 
 - [Skill 模版](./templates/agents/common/skills/git-ai-mcp/SKILL.md)：指导 Agent 如何使用工具
 - [Rule 模版](./templates/agents/common/rules/git-ai-mcp/RULE.md)：约束 Agent 的行为
+
+Skills/Rules 文档（Markdown/YAML）会被纳入语义索引，便于通过 `semantic_search` 检索 MCP 指南。
 
 一键安装到你的项目：
 
