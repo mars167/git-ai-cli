@@ -264,7 +264,7 @@ export class IndexerV2 {
       languages,
       dbDir: path.relative(this.repoRoot, dbDir),
       scanRoot: path.relative(this.repoRoot, this.scanRoot),
-      commit_hash: commitHash ?? undefined,
+      ...(commitHash ? { commit_hash: commitHash } : {}),
       astGraph: astGraph.enabled
         ? {
           backend: 'cozo',

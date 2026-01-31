@@ -297,7 +297,7 @@ export class IncrementalIndexerV2 {
       scanRoot: path.relative(this.repoRoot, this.scanRoot),
       languages: ALL_INDEX_LANGS,
       byLang: addedByLang,
-      commit_hash: commitHash ?? undefined,
+      ...(commitHash ? { commit_hash: commitHash } : {}),
       astGraph: astGraph.enabled
         ? {
           backend: 'cozo',
