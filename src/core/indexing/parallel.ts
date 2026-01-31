@@ -219,7 +219,12 @@ async function readLargeFile(filePath: string, maxChars: number): Promise<string
 
 function parseWithFallback(parser: SnapshotCodeParser, content: string, filePath: string, config: ErrorHandlingConfig): { symbols: SymbolInfo[]; refs: AstReference[] } {
   try {
-    return parser.parseContent(filePath, content);
+    const result = parser.parseContent(filePath, content);
+    // If parser returned empty results and fallback is configured, use fallback
+    if (result.symbols.length === 0 && result.refs.length === 0) {
+      return fallbackParse(content, filePath, config);
+    }
+    return result;
   } catch {
     return fallbackParse(content, filePath, config);
   }
