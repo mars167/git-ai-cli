@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import * as lancedb from '@lancedb/lancedb';
 import { ALL_INDEX_LANGS, IndexLang } from './lancedb';
+import { getCurrentCommitHash } from './git';
 
 export const EXPECTED_INDEX_SCHEMA_VERSION = 3;
 
@@ -15,11 +16,13 @@ export interface IndexMetaV21 {
   scanRoot?: string;
   languages?: IndexLang[];
   astGraph?: any;
+  commit_hash?: string;
 }
 
 export interface IndexCheckResult {
   ok: boolean;
   problems: string[];
+  warnings: string[];
   expected: {
     index_schema_version: number;
   };
@@ -30,6 +33,7 @@ export interface IndexCheckResult {
     lancedbTables?: string[];
     astGraphDbPath: string;
     astGraphDbExists: boolean;
+    currentCommitHash?: string | null;
   };
   hint: string;
 }
@@ -57,12 +61,23 @@ export async function checkIndex(repoRoot: string): Promise<IndexCheckResult> {
   const astGraphDbPath = path.join(repoRoot, '.git-ai', 'ast-graph.sqlite');
 
   const problems: string[] = [];
+  const warnings: string[] = [];
   const meta: IndexMetaV21 | null = await fs.pathExists(metaPath) ? await fs.readJSON(metaPath).catch(() => null) : null;
+  const currentCommitHash = await getCurrentCommitHash(repoRoot);
 
   if (!meta) {
     problems.push('missing_or_unreadable_meta_json');
   } else if (meta.index_schema_version !== EXPECTED_INDEX_SCHEMA_VERSION) {
     problems.push(`index_schema_version_mismatch(found=${String(meta.index_schema_version ?? 'null')}, expected=${EXPECTED_INDEX_SCHEMA_VERSION})`);
+  }
+
+  // Check if index commit hash matches current HEAD
+  if (meta && currentCommitHash) {
+    if (meta.commit_hash && meta.commit_hash !== currentCommitHash) {
+      warnings.push(`index_commit_mismatch(index=${meta.commit_hash.substring(0, 7)}, head=${currentCommitHash.substring(0, 7)})`);
+    } else if (!meta.commit_hash) {
+      warnings.push('index_commit_hash_not_recorded');
+    }
   }
 
   let lancedbTables: string[] | undefined;
@@ -93,6 +108,7 @@ export async function checkIndex(repoRoot: string): Promise<IndexCheckResult> {
   return {
     ok,
     problems,
+    warnings,
     expected: { index_schema_version: EXPECTED_INDEX_SCHEMA_VERSION },
     found: {
       metaPath,
@@ -101,6 +117,7 @@ export async function checkIndex(repoRoot: string): Promise<IndexCheckResult> {
       lancedbTables,
       astGraphDbPath,
       astGraphDbExists,
+      currentCommitHash,
     },
     hint: ok ? 'ok' : 'Rebuild index: git-ai ai index --overwrite',
   };
