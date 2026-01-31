@@ -24,8 +24,8 @@ git-ai ai serve
 - `unpack_index({ path })`：解包索引归档
 
 ### 检索
-- `search_symbols({ path, query, mode?, case_insensitive?, max_candidates?, limit?, lang?, with_repo_map?, repo_map_max_files?, repo_map_max_symbols?, wiki_dir? })`：符号检索（lang: auto/all/java/ts；可选附带 repo_map）
-- `semantic_search({ path, query, topk?, lang?, with_repo_map?, repo_map_max_files?, repo_map_max_symbols?, wiki_dir? })`：基于 LanceDB + SQ8 的语义检索（lang: auto/all/java/ts；可选附带 repo_map）
+- `search_symbols({ path, query, mode?, case_insensitive?, max_candidates?, limit?, lang?, with_repo_map?, repo_map_max_files?, repo_map_max_symbols?, wiki_dir? })`：符号检索（lang: auto/all/java/ts/python/go/rust/c/markdown/yaml；可选附带 repo_map）
+- `semantic_search({ path, query, topk?, lang?, with_repo_map?, repo_map_max_files?, repo_map_max_symbols?, wiki_dir? })`：基于 LanceDB + SQ8 的语义检索（lang: auto/all/java/ts/python/go/rust/c/markdown/yaml；可选附带 repo_map）
 - `repo_map({ path, max_files?, max_symbols?, wiki_dir? })`：生成 repo map（重要文件/符号排名、引导 Wiki 阅读）
 - `ast_graph_find({ path, prefix, limit?, lang? })`：按名字前缀查找符号定义（大小写不敏感；lang: auto/all/java/ts）
 - `ast_graph_children({ path, id, as_file? })`：列出包含关系的直接子节点（文件→顶层符号、类→方法等）
@@ -122,6 +122,8 @@ semantic_search({ path: "/ABS/PATH/TO/REPO", query: "where is auth handled", top
 
 本仓库提供了 Agent 可直接复用的 Skill/Rule 模板，旨在让 Agent 能够遵循最佳实践来使用上述工具。
 
+这些模板文档（Markdown/YAML）会被索引，便于 Agent 通过 `semantic_search` 检索 MCP 规则与技能说明。
+
 ### YAML 格式模板
 
 - **Skill**: [`templates/agents/common/skills/git-ai/skill.yaml`](../../templates/agents/common/skills/git-ai/skill.yaml) - 指导 Agent 如何使用 git-ai 的 Git-native 语义体系（包含 DSR 约束）与 MCP 工具
@@ -173,6 +175,9 @@ git-ai ai agent install --agent trae
 - **understand_before_modify**: 修改前必须先理解实现
 - **use_dsr_for_history**: 追溯历史必须使用 DSR 工具
 - **respect_dsr_risk**: 重视 DSR 报告的 high 风险变更
+
+文档/规则检索建议：
+- 当问题涉及 MCP/Skill/Rule 时，先用 `semantic_search` 定位对应文档片段，再给出结论。
 
 禁止事项包括：
 - 假设符号位置而不搜索

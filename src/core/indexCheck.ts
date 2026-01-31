@@ -44,7 +44,7 @@ export function resolveLangs(meta: IndexMetaV21 | null, selector: LangSelector):
   const available = filtered.length > 0 ? filtered : (['java', 'ts'] as IndexLang[]);
   if (selector === 'all') return available;
   if (selector !== 'auto') return available.includes(selector) ? [selector] : [];
-  const preferred: IndexLang[] = ['java', 'ts', 'python', 'go', 'rust', 'c'];
+  const preferred: IndexLang[] = ['java', 'ts', 'python', 'go', 'rust', 'c', 'markdown', 'yaml'];
   for (const lang of preferred) {
     if (available.includes(lang)) return [lang];
   }

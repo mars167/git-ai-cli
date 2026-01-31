@@ -17,7 +17,7 @@ export const queryCommand = new Command('query')
   .option('--mode <mode>', 'Mode: substring|prefix|wildcard|regex|fuzzy (default: auto)')
   .option('--case-insensitive', 'Case-insensitive matching', false)
   .option('--max-candidates <n>', 'Max candidates to fetch before filtering', '1000')
-  .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c', 'auto')
+  .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c|markdown|yaml', 'auto')
   .option('--with-repo-map', 'Attach a lightweight repo map (ranked files + top symbols + wiki links)', false)
   .option('--repo-map-files <n>', 'Max repo map files', '20')
   .option('--repo-map-symbols <n>', 'Max repo map symbols per file', '5')
@@ -110,6 +110,8 @@ function resolveWikiDir(repoRoot: string, wikiOpt: string): string {
 
 function inferLangFromFile(file: string): IndexLang {
   const f = String(file);
+  if (f.endsWith('.md') || f.endsWith('.mdx')) return 'markdown';
+  if (f.endsWith('.yml') || f.endsWith('.yaml')) return 'yaml';
   if (f.endsWith('.java')) return 'java';
   if (f.endsWith('.c') || f.endsWith('.h')) return 'c';
   if (f.endsWith('.go')) return 'go';

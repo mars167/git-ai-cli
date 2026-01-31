@@ -31,7 +31,7 @@ export const graphCommand = new Command('graph')
       .description('Find symbols by name prefix')
       .argument('<prefix>', 'Name prefix (case-insensitive)')
       .option('-p, --path <path>', 'Path inside the repository', '.')
-      .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c', 'auto')
+      .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c|markdown|yaml', 'auto')
       .action(async (prefix, options) => {
         const log = createLogger({ component: 'cli', cmd: 'ai graph find' });
         const startedAt = Date.now();
@@ -77,7 +77,7 @@ export const graphCommand = new Command('graph')
       .argument('<name>', 'Symbol name')
       .option('-p, --path <path>', 'Path inside the repository', '.')
       .option('--limit <n>', 'Limit results', '200')
-      .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c', 'auto')
+      .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c|markdown|yaml', 'auto')
       .action(async (name, options) => {
         const log = createLogger({ component: 'cli', cmd: 'ai graph refs' });
         const startedAt = Date.now();
@@ -108,7 +108,7 @@ export const graphCommand = new Command('graph')
       .argument('<name>', 'Callee name')
       .option('-p, --path <path>', 'Path inside the repository', '.')
       .option('--limit <n>', 'Limit results', '200')
-      .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c', 'auto')
+      .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c|markdown|yaml', 'auto')
       .action(async (name, options) => {
         const log = createLogger({ component: 'cli', cmd: 'ai graph callers' });
         const startedAt = Date.now();
@@ -139,7 +139,7 @@ export const graphCommand = new Command('graph')
       .argument('<name>', 'Caller name')
       .option('-p, --path <path>', 'Path inside the repository', '.')
       .option('--limit <n>', 'Limit results', '200')
-      .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c', 'auto')
+      .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c|markdown|yaml', 'auto')
       .action(async (name, options) => {
         const log = createLogger({ component: 'cli', cmd: 'ai graph callees' });
         const startedAt = Date.now();
@@ -173,7 +173,7 @@ export const graphCommand = new Command('graph')
       .option('--depth <n>', 'Max depth', '3')
       .option('--limit <n>', 'Limit results', '500')
       .option('--min-name-len <n>', 'Filter out edges with very short names (default: 1)', '1')
-      .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c', 'auto')
+      .option('--lang <lang>', 'Language: auto|all|java|ts|python|go|rust|c|markdown|yaml', 'auto')
       .action(async (name, options) => {
         const log = createLogger({ component: 'cli', cmd: 'ai graph chain' });
         const startedAt = Date.now();
