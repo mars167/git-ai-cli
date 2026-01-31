@@ -30,7 +30,7 @@ export const statusCommand = new Command('status')
       if (unsupported.length > 0) lines.push(`unsupportedLanguages: ${unsupported.join(', ')}`);
       if (meta.dbDir) lines.push(`db: ${meta.dbDir}`);
       if (meta.scanRoot) lines.push(`scanRoot: ${meta.scanRoot}`);
-      
+
       // Display commit information
       if (meta.commit_hash) {
         const shortHash = meta.commit_hash.substring(0, 7);
