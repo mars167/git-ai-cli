@@ -74,7 +74,7 @@ export async function checkIndex(repoRoot: string): Promise<IndexCheckResult> {
   // Check if index commit hash matches current HEAD
   if (meta && currentCommitHash) {
     if (meta.commit_hash && meta.commit_hash !== currentCommitHash) {
-      warnings.push(`index_commit_mismatch(index=${meta.commit_hash.substring(0, 7)}, head=${currentCommitHash.substring(0, 7)})`);
+      warnings.push(`index_commit_mismatch(index=${meta.commit_hash.slice(0, 7)}, head=${currentCommitHash.slice(0, 7)})`);
     } else if (!meta.commit_hash) {
       warnings.push('index_commit_hash_not_recorded');
     }

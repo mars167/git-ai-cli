@@ -33,10 +33,10 @@ export const statusCommand = new Command('status')
 
       // Display commit information
       if (meta.commit_hash) {
-        const shortHash = meta.commit_hash.substring(0, 7);
+        const shortHash = meta.commit_hash.slice(0, 7);
         const currentHash = res.found.currentCommitHash;
         if (currentHash) {
-          const currentShort = currentHash.substring(0, 7);
+          const currentShort = currentHash.slice(0, 7);
           if (meta.commit_hash === currentHash) {
             lines.push(`commit: ${shortHash} (up-to-date)`);
           } else {
@@ -46,7 +46,7 @@ export const statusCommand = new Command('status')
           lines.push(`commit: ${shortHash}`);
         }
       } else if (res.found.currentCommitHash) {
-        lines.push(`commit: not recorded (HEAD is ${res.found.currentCommitHash.substring(0, 7)})`);
+        lines.push(`commit: not recorded (HEAD is ${res.found.currentCommitHash.slice(0, 7)})`);
       }
     } else {
       lines.push(`meta: missing (${res.found.metaPath})`);
