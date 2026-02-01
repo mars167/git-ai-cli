@@ -7,8 +7,8 @@
 [![ci](https://github.com/mars167/git-ai-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/mars167/git-ai-cli/actions/workflows/ci.yml)
 [![release](https://github.com/mars167/git-ai-cli/actions/workflows/release.yml/badge.svg)](https://github.com/mars167/git-ai-cli/actions/workflows/release.yml)
 [![license](https://img.shields.io/github/license/mars167/git-ai-cli)](./LICENSE)
-[![npm (github packages)](https://img.shields.io/npm/v/%40mars167%2Fgit-ai?registry_uri=https%3A%2F%2Fnpm.pkg.github.com)](https://github.com/mars167/git-ai-cli/packages)
-[![npm](https://img.shields.io/npm/dm/%40mars167%2Fgit-ai?label=npm%20downloads)](https://www.npmjs.com/package/%40mars167%2Fgit-ai)
+[![npm version](https://img.shields.io/npm/v/@mars167/git-ai)](https://www.npmjs.com/package/@mars167/git-ai)
+[![npm downloads](https://img.shields.io/npm/dm/@mars167/git-ai)](https://www.npmjs.com/package/@mars167/git-ai)
 
 [🇨🇳 简体中文](./README.zh-CN.md) | **English**
 
