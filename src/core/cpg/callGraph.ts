@@ -103,7 +103,7 @@ function collectSymbolTable(contexts: CallGraphContext[]): Map<string, SymbolEnt
             signature: node.text.split('{')[0].trim(),
           };
           const id = symbolNodeId(filePosix, symbol);
-          table.set(symbol.name, {
+          table.set(`${filePosix}:${symbol.name}`, {
             id,
             name: symbol.name,
             file: filePosix,
@@ -124,7 +124,7 @@ function collectSymbolTable(contexts: CallGraphContext[]): Map<string, SymbolEnt
             signature: `class ${nameNode.text}`,
           };
           const id = symbolNodeId(filePosix, symbol);
-          table.set(symbol.name, {
+          table.set(`${filePosix}:${symbol.name}`, {
             id,
             name: symbol.name,
             file: filePosix,
@@ -150,40 +150,36 @@ function collectImports(context: CallGraphContext): ImportBinding[] {
     if (node.type === 'import_statement') {
       const source = node.childForFieldName('source');
       const moduleName = source ? source.text.replace(/['"]/g, '') : '';
-      const clause = node.childForFieldName('clause');
-      if (clause) {
-        for (let i = 0; i < clause.namedChildCount; i++) {
-          const child = clause.namedChild(i);
-          if (!child) continue;
-          if (child.type === 'import_specifier') {
-            const nameNode = child.childForFieldName('name');
-            const aliasNode = child.childForFieldName('alias');
-            const importedName = nameNode?.text ?? '';
-            const localName = aliasNode?.text ?? importedName;
-            if (localName) bindings.push({ modulePath: moduleName, importedName, localName });
-          } else if (child.type === 'identifier') {
-            bindings.push({ modulePath: moduleName, importedName: 'default', localName: child.text });
-          } else if (child.type === 'namespace_import') {
-            const nameNode = child.childForFieldName('name');
-            if (nameNode) bindings.push({ modulePath: moduleName, importedName: '*', localName: nameNode.text });
+      
+      let clause = node.childForFieldName('clause') ?? node.childForFieldName('declaration');
+      if (!clause) {
+        for (let k = 0; k < node.namedChildCount; k++) {
+          const c = node.namedChild(k);
+          if (c?.type === 'import_clause') {
+            clause = c;
+            break;
           }
         }
       }
-    }
-    if (node.type === 'export_statement') {
-      const source = node.childForFieldName('source');
-      const moduleName = source ? source.text.replace(/['"]/g, '') : '';
-      const clause = node.childForFieldName('declaration') ?? node.childForFieldName('clause');
+
       if (moduleName && clause) {
         for (let i = 0; i < clause.namedChildCount; i++) {
           const child = clause.namedChild(i);
           if (!child) continue;
-          if (child.type === 'export_specifier') {
-            const nameNode = child.childForFieldName('name');
-            const aliasNode = child.childForFieldName('alias');
-            const importedName = nameNode?.text ?? '';
-            const localName = aliasNode?.text ?? importedName;
-            if (localName) bindings.push({ modulePath: moduleName, importedName, localName });
+
+          if (child.type === 'identifier') {
+            bindings.push({ modulePath: moduleName, importedName: 'default', localName: child.text });
+          } else if (child.type === 'named_imports') {
+            for (let j = 0; j < child.namedChildCount; j++) {
+              const spec = child.namedChild(j);
+              if (spec?.type === 'import_specifier') {
+                const nameNode = spec.childForFieldName('name');
+                const aliasNode = spec.childForFieldName('alias');
+                const importedName = nameNode?.text ?? '';
+                const localName = aliasNode?.text ?? importedName;
+                if (localName) bindings.push({ modulePath: moduleName, importedName, localName });
+              }
+            }
           }
         }
       }
@@ -232,7 +228,7 @@ function collectFunctionScopes(context: CallGraphContext, symbolTable: Map<strin
     if (FUNCTION_NODE_TYPES.has(node.type)) {
       const nameNode = node.childForFieldName('name');
       if (nameNode) {
-        const symbol = symbolTable.get(nameNode.text);
+        const symbol = symbolTable.get(`${toPosixPath(context.filePath)}:${nameNode.text}`);
         const id = symbol?.id ?? symbolNodeId(toPosixPath(context.filePath), {
           name: nameNode.text,
           kind: node.type === 'method_definition' ? 'method' : 'function',
@@ -252,7 +248,7 @@ function collectFunctionScopes(context: CallGraphContext, symbolTable: Map<strin
     if (node.type === 'class_declaration') {
       const nameNode = node.childForFieldName('name');
       if (nameNode) {
-        const symbol = symbolTable.get(nameNode.text);
+        const symbol = symbolTable.get(`${toPosixPath(context.filePath)}:${nameNode.text}`);
         const id = symbol?.id ?? symbolNodeId(toPosixPath(context.filePath), {
           name: nameNode.text,
           kind: 'class',
@@ -284,7 +280,7 @@ function findNearestFunction(node: Parser.SyntaxNode, symbolTable: Map<string, S
     if (FUNCTION_NODE_TYPES.has(current.type)) {
       const nameNode = current.childForFieldName('name');
       if (nameNode) {
-        const symbol = symbolTable.get(nameNode.text);
+        const symbol = symbolTable.get(`${toPosixPath(filePath)}:${nameNode.text}`);
         const id = symbol?.id ?? symbolNodeId(toPosixPath(filePath), {
           name: nameNode.text,
           kind: current.type === 'method_definition' ? 'method' : 'function',
@@ -315,14 +311,38 @@ function resolveCallTarget(
   calleeNode: Parser.SyntaxNode,
   importBindings: ImportBinding[],
   symbolTable: Map<string, SymbolEntry>,
+  currentFile: string,
 ): SymbolEntry | null {
+  const filePosix = toPosixPath(currentFile);
+  const lookup = (name: string, file?: string) => {
+    if (file) {
+      let qualified = `${file}:${name}`;
+      if (symbolTable.has(qualified)) return symbolTable.get(qualified);
+
+      const extensions = ['.ts', '.tsx', '.js', '.jsx', '.d.ts'];
+      for (const ext of extensions) {
+        qualified = `${file}${ext}:${name}`;
+        if (symbolTable.has(qualified)) return symbolTable.get(qualified);
+      }
+
+      for (const ext of extensions) {
+        qualified = `${file}/index${ext}:${name}`;
+        if (symbolTable.has(qualified)) return symbolTable.get(qualified);
+      }
+    }
+    return undefined;
+  };
+
   if (calleeNode.type === 'identifier') {
-    const direct = symbolTable.get(calleeNode.text);
+    const direct = lookup(calleeNode.text, filePosix);
     if (direct) return direct;
+    
     const imported = importBindings.find((binding) => binding.localName === calleeNode.text);
     if (imported) {
-      const resolvedName = imported.importedName === 'default' ? imported.localName : imported.importedName;
-      return symbolTable.get(resolvedName) ?? null;
+      const resolvedModule = resolveModulePath(filePosix, imported.modulePath);
+      const resolvedName = imported.importedName === 'default' ? 'default' : (imported.importedName || imported.localName);
+      if (imported.importedName === '*') return null;
+      return lookup(resolvedName, resolvedModule) ?? null;
     }
   }
 
@@ -332,17 +352,15 @@ function resolveCallTarget(
     if (objectNode?.type === 'identifier') {
       const binding = importBindings.find((entry) => entry.localName === objectNode.text);
       if (binding) {
-        const resolved = propNode ? symbolTable.get(propNode.text) : null;
+        const resolvedModule = resolveModulePath(filePosix, binding.modulePath);
+        const resolved = propNode ? lookup(propNode.text, resolvedModule) : null;
         return resolved ?? null;
       }
-    }
-    if (propNode?.type === 'identifier') {
-      return symbolTable.get(propNode.text) ?? null;
     }
   }
 
   const fallback = extractCalleeName(calleeNode);
-  if (fallback) return symbolTable.get(fallback) ?? null;
+  if (fallback) return lookup(fallback, filePosix) ?? null;
   return null;
 }
 
@@ -381,7 +399,7 @@ function buildCallGraphLayer(contexts: CallGraphContext[]): { graph: CallGraph; 
       if (node.type === 'call_expression') {
         const fnNode = node.childForFieldName('function') ?? node.namedChild(0);
         if (fnNode) {
-          const resolved = resolveCallTarget(fnNode, importBindings, symbolTable);
+          const resolved = resolveCallTarget(fnNode, importBindings, symbolTable, ctx.filePath);
           if (resolved) {
             const caller = findNearestFunction(node, symbolTable, ctx.filePath) ?? { id: moduleId, name: filePosix };
             edges.push({ from: caller.id, to: resolved.id, type: EdgeType.CALLS });
@@ -392,7 +410,7 @@ function buildCallGraphLayer(contexts: CallGraphContext[]): { graph: CallGraph; 
       if (node.type === 'new_expression') {
         const ctor = node.childForFieldName('constructor') ?? node.namedChild(0);
         if (ctor) {
-          const resolved = resolveCallTarget(ctor, importBindings, symbolTable);
+          const resolved = resolveCallTarget(ctor, importBindings, symbolTable, ctx.filePath);
           if (resolved) {
             const caller = findNearestFunction(node, symbolTable, ctx.filePath) ?? { id: moduleId, name: filePosix };
             edges.push({ from: caller.id, to: resolved.id, type: EdgeType.CALLS });
