@@ -218,7 +218,7 @@ graph TB
 ### 1. 安装
 
 ```bash
-npm install -g git-ai
+npm install -g @mars167/git-ai
 ```
 
 ### 2. 初始化仓库

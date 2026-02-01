@@ -98,7 +98,7 @@ jobs:
       - name: Restore package name for npmjs
         if: ${{ env.RELEASE_TAG != '' }}
         run: |
-          npm pkg set name="git-ai"
+          npm pkg set name="@mars167/git-ai"
 
       - name: Setup Node (npmjs.org)
         if: ${{ env.RELEASE_TAG != '' }}
@@ -123,9 +123,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Published to:" >> $GITHUB_STEP_SUMMARY
           echo "- [x] GitHub Packages: \`@${{ github.repository_owner }}/git-ai\`" >> $GITHUB_STEP_SUMMARY
-          echo "- [x] npmjs.org: \`git-ai\`" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] npmjs.org: \`@mars167/git-ai\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Install:" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "npm install -g git-ai" >> $GITHUB_STEP_SUMMARY
+          echo "npm install -g @mars167/git-ai" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
