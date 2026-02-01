@@ -221,7 +221,7 @@ graph TB
 ### 1. Install
 
 ```bash
-npm install -g git-ai
+npm install -g @mars167/git-ai
 ```
 
 ### 2. Initialize Repository

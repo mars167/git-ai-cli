@@ -116,10 +116,10 @@ main() {
     info "Installing git-ai CLI..."
     
     if [ "$GLOBAL_INSTALL" = true ]; then
-        npm install -g git-ai
+        npm install -g @mars167/git-ai
         success "git-ai installed globally"
     else
-        npm install git-ai
+        npm install @mars167/git-ai
         success "git-ai installed locally"
     fi
     
