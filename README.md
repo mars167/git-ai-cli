@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.png" alt="git-ai logo" width="200"/>
+</p>
+
 # git-ai
 
 [![ci](https://github.com/mars167/git-ai-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/mars167/git-ai-cli/actions/workflows/ci.yml)
