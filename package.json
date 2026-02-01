@@ -21,7 +21,19 @@
     "templates/**",
     "README.md"
   ],
-  "keywords": [],
+  "keywords": [
+    "git",
+    "ai",
+    "semantic-search",
+    "mcp",
+    "code-search",
+    "code-understanding",
+    "vector-search",
+    "graph-database",
+    "cli",
+    "code-indexing",
+    "knowledge-graph"
+  ],
   "author": "mars167",
   "license": "MIT",
   "description": "A git-compatible CLI with AI indexing/search and an MCP server.",
@@ -35,6 +47,15 @@
   "homepage": "https://github.com/mars167/git-ai-cli#readme",
   "engines": {
     "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/mars167"
   },
   "dependencies": {
     "@lancedb/lancedb": "0.22.3",
