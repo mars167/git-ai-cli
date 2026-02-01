@@ -18,7 +18,7 @@ export enum EdgeType {
   IMPLEMENTS = 'IMPLEMENTS',
 }
 
-export type CpgLayerName = 'ast' | 'cfg' | 'dfg' | 'call' | 'import';
+export type CpgLayerName = 'ast' | 'cfg' | 'dfg' | 'callGraph' | 'importGraph';
 
 export interface CPENode {
   id: string;

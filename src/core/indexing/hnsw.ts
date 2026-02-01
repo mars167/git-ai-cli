@@ -4,9 +4,11 @@ import { SQ8Vector, quantizeSQ8, dequantizeSQ8, cosineSimilarity as cosineSimila
 import { HNSWParameters } from './config';
 
 export interface HNSWConfig extends HNSWParameters {
-  dim?: number;
+  dim: number;
   maxElements?: number;
 }
+
+type HNSWConfigInput = HNSWParameters & { dim?: number; maxElements?: number };
 
 export interface QuantizedVector extends SQ8Vector {
   id: string;
@@ -124,14 +126,15 @@ export class HNSWIndex {
   private dim?: number;
   private levelCap?: number;
 
-  constructor(config: HNSWConfig) {
+  constructor(config: HNSWConfigInput) {
     const clamped = clampHnswParameters(config);
-    this.config = { ...clamped, dim: config.dim, maxElements: config.maxElements };
+    const dim = typeof config.dim === 'number' && Number.isFinite(config.dim) ? config.dim : 0;
+    this.config = { ...clamped, dim, maxElements: config.maxElements };
     this.nodes = new Map();
     this.entryPoint = null;
     this.maxLevel = 0;
     this.levelMult = this.computeLevelMult();
-    this.dim = config.dim;
+    this.dim = dim > 0 ? dim : undefined;
     this.levelCap = this.computeLevelCap();
   }
 
@@ -198,7 +201,9 @@ export class HNSWIndex {
 
   search(query: SQ8Vector, k: number): SearchResult[] {
     if (!this.entryPoint) return [];
+    if (k <= 0) return [];
     const limit = Math.max(1, k);
+    this.ensureDim(query);
     let current = this.entryPoint.nodeId;
 
     for (let level = this.entryPoint.level; level > 0; level--) {
@@ -282,17 +287,17 @@ export class HNSWIndex {
     const efConstruction = readUInt32(data, state);
     const efSearch = readUInt32(data, state);
     const quantizationBits = readUInt32(data, state);
-    const dim = readUInt32(data, state) || undefined;
+    const dim = readUInt32(data, state);
     const maxElements = readUInt32(data, state) || undefined;
     const nodeCount = readUInt32(data, state);
     const headerMaxLevel = readUInt32(data, state);
 
-    const config: HNSWConfig = {
+    const config: HNSWConfigInput = {
       M,
       efConstruction,
       efSearch,
       quantizationBits,
-      dim,
+      dim: dim || undefined,
       maxElements,
     };
 
@@ -307,6 +312,9 @@ export class HNSWIndex {
       const scale = readFloat32(data, state);
       const q = copyInt8Slice(data, state.offset, vecDim);
       state.offset += vecDim;
+      if (dim && vecDim !== dim) {
+        throw new Error(`HNSW node dim mismatch: expected ${dim}, got ${vecDim}`);
+      }
 
       const neighborsByLevelCount = readUInt32(data, state);
       const neighbors = new Map<number, Map<string, number>>();
@@ -341,22 +349,27 @@ export class HNSWIndex {
       if (!nodes.has(entryId)) {
         throw new Error(`HNSW entry point not found: ${entryId}`);
       }
+      const entryNode = nodes.get(entryId);
+      if (entryNode && entryLevel > entryNode.level) {
+        throw new Error(`HNSW entry point level mismatch: ${entryLevel} > ${entryNode.level}`);
+      }
       entryPoint = { nodeId: entryId, level: entryLevel };
     } else if (highest) {
       entryPoint = highest;
     }
 
     const clamped = clampHnswParameters(config);
-    this.config = { ...clamped, dim, maxElements };
+    const resolvedDim = dim || this.dim || 0;
+    this.config = { ...clamped, dim: resolvedDim, maxElements };
     this.nodes = nodes;
     this.entryPoint = entryPoint;
     this.maxLevel = maxLevel;
-    this.dim = dim ?? this.dim;
+    this.dim = resolvedDim > 0 ? resolvedDim : undefined;
     if (!this.dim && nodes.size > 0) {
       const first = nodes.values().next().value as HNSWNode | undefined;
       this.dim = first?.vector.dim;
     }
-    this.config.dim = this.dim;
+    this.config.dim = this.dim ?? 0;
     this.levelMult = this.computeLevelMult();
     this.levelCap = this.computeLevelCap();
   }
@@ -454,8 +467,8 @@ export class HNSWIndex {
     if (!index.dim && index.nodes.size > 0) {
       const first = index.nodes.values().next().value as HNSWNode | undefined;
       index.dim = first?.vector.dim;
-      index.config.dim = index.dim;
     }
+    index.config.dim = index.dim ?? 0;
     index.levelMult = index.computeLevelMult();
     index.levelCap = index.computeLevelCap();
     return index;
@@ -469,6 +482,9 @@ export class HNSWIndex {
     }
     if (vector.dim !== this.dim) {
       throw new Error(`HNSW vector dim mismatch: expected ${this.dim}, got ${vector.dim}`);
+    }
+    if (vector.q.length !== vector.dim) {
+      throw new Error(`HNSW quantized vector length mismatch: expected ${vector.dim}, got ${vector.q.length}`);
     }
   }
 
@@ -639,14 +655,19 @@ export function clampHnswParameters(config: HNSWParameters): HNSWParameters {
   };
 }
 
-export function quantize(vector: number[], bits: number = 8): SQ8Vector {
-  return quantizeSQ8(vector, bits);
+export function quantize(vector: number[], bits: number = 8, id: string = ''): QuantizedVector {
+  const q = quantizeSQ8(vector, bits);
+  return { ...q, id };
 }
 
+export function dequantize(q: SQ8Vector): Float32Array;
+export function dequantize(q: QuantizedVector): Float32Array;
 export function dequantize(q: SQ8Vector): Float32Array {
   return dequantizeSQ8(q);
 }
 
+export function cosineSimilarity(a: SQ8Vector, b: SQ8Vector): number;
+export function cosineSimilarity(a: QuantizedVector, b: QuantizedVector): number;
 export function cosineSimilarity(a: SQ8Vector, b: SQ8Vector): number {
   return cosineSimilarityRaw(dequantizeSQ8(a), dequantizeSQ8(b));
 }

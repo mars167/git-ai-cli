@@ -1,6 +1,6 @@
 {
   "name": "git-ai",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "main": "dist/index.js",
   "bin": {
     "git-ai": "dist/bin/git-ai.js"
@@ -45,6 +45,7 @@
     "commander": "^14.0.2",
     "fs-extra": "^11.3.3",
     "glob": "^13.0.0",
+    "onnxruntime-node": "^1.19.2",
     "simple-git": "^3.30.0",
     "tar": "^7.5.3",
     "tree-sitter": "^0.21.1",

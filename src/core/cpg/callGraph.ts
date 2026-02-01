@@ -1,5 +1,6 @@
 import Parser from 'tree-sitter';
 import path from 'path';
+import TypeScript from 'tree-sitter-typescript';
 import { CPENode, CPEEdge, EdgeType, GraphLayer, moduleNodeId, createModuleNode, symbolNodeId } from './types';
 import { toPosixPath } from '../paths';
 
@@ -9,18 +10,65 @@ export interface CallGraphContext {
   root: Parser.SyntaxNode;
 }
 
+export interface FunctionInfo {
+  id: string;
+  name: string;
+  filePath: string;
+  startLine: number;
+  endLine: number;
+}
+
+export interface CallEdge {
+  from: string;
+  to: string;
+  line: number;
+}
+
+export interface ImportEdge {
+  fromFile: string;
+  toFile: string;
+  importedSymbols: string[];
+}
+
+export interface CallGraph {
+  functions: Map<string, FunctionInfo>;
+  calls: CallEdge[];
+  imports: ImportEdge[];
+}
+
+interface FunctionScope {
+  id: string;
+  name: string;
+}
+
+interface ImportBinding {
+  modulePath: string;
+  importedName: string;
+  localName: string;
+}
+
 interface SymbolEntry {
   id: string;
   name: string;
   file: string;
   kind: string;
+  startLine: number;
+  endLine: number;
 }
+
+const FUNCTION_NODE_TYPES = new Set([
+  'function_declaration',
+  'function',
+  'arrow_function',
+  'method_definition',
+]);
 
 const EXPORT_TYPES = new Set([
   'export_statement',
   'export_clause',
   'export_specifier',
   'export_default_declaration',
+  'export_assignment',
 ]);
 
 const IMPORT_TYPES = new Set([
@@ -29,6 +77,15 @@ const IMPORT_TYPES = new Set([
   'import_specifier',
   'namespace_import',
 ]);
+
+function resolveModulePath(fromFile: string, specifier: string): string {
+  if (!specifier) return specifier;
+  if (specifier.startsWith('.')) {
+    const resolved = path.normalize(path.join(path.dirname(fromFile), specifier));
+    return toPosixPath(resolved);
+  }
+  return specifier;
+}
 
 function collectSymbolTable(contexts: CallGraphContext[]): Map<string, SymbolEntry> {
   const table = new Map<string, SymbolEntry>();
@@ -46,7 +103,14 @@ function collectSymbolTable(contexts: CallGraphContext[]): Map<string, SymbolEnt
             signature: node.text.split('{')[0].trim(),
           };
           const id = symbolNodeId(filePosix, symbol);
-          table.set(symbol.name, { id, name: symbol.name, file: filePosix, kind: symbol.kind });
+          table.set(symbol.name, {
+            id,
+            name: symbol.name,
+            file: filePosix,
+            kind: symbol.kind,
+            startLine: symbol.startLine,
+            endLine: symbol.endLine,
+          });
         }
       }
       if (node.type === 'class_declaration') {
@@ -60,7 +124,14 @@ function collectSymbolTable(contexts: CallGraphContext[]): Map<string, SymbolEnt
             signature: `class ${nameNode.text}`,
           };
           const id = symbolNodeId(filePosix, symbol);
-          table.set(symbol.name, { id, name: symbol.name, file: filePosix, kind: symbol.kind });
+          table.set(symbol.name, {
+            id,
+            name: symbol.name,
+            file: filePosix,
+            kind: symbol.kind,
+            startLine: symbol.startLine,
+            endLine: symbol.endLine,
+          });
         }
       }
       for (let i = 0; i < node.childCount; i++) {
@@ -73,8 +144,8 @@ function collectSymbolTable(contexts: CallGraphContext[]): Map<string, SymbolEnt
   return table;
 }
 
-function collectImportMap(context: CallGraphContext): Map<string, string> {
-  const imports = new Map<string, string>();
+function collectImports(context: CallGraphContext): ImportBinding[] {
+  const bindings: ImportBinding[] = [];
   const visit = (node: Parser.SyntaxNode) => {
     if (node.type === 'import_statement') {
       const source = node.childForFieldName('source');
@@ -87,13 +158,32 @@ function collectImportMap(context: CallGraphContext): Map<string, string> {
           if (child.type === 'import_specifier') {
             const nameNode = child.childForFieldName('name');
             const aliasNode = child.childForFieldName('alias');
-            const name = aliasNode?.text ?? nameNode?.text;
-            if (name) imports.set(name, moduleName);
+            const importedName = nameNode?.text ?? '';
+            const localName = aliasNode?.text ?? importedName;
+            if (localName) bindings.push({ modulePath: moduleName, importedName, localName });
           } else if (child.type === 'identifier') {
-            imports.set(child.text, moduleName);
+            bindings.push({ modulePath: moduleName, importedName: 'default', localName: child.text });
           } else if (child.type === 'namespace_import') {
             const nameNode = child.childForFieldName('name');
-            if (nameNode) imports.set(nameNode.text, moduleName);
+            if (nameNode) bindings.push({ modulePath: moduleName, importedName: '*', localName: nameNode.text });
+          }
+        }
+      }
+    }
+    if (node.type === 'export_statement') {
+      const source = node.childForFieldName('source');
+      const moduleName = source ? source.text.replace(/['"]/g, '') : '';
+      const clause = node.childForFieldName('declaration') ?? node.childForFieldName('clause');
+      if (moduleName && clause) {
+        for (let i = 0; i < clause.namedChildCount; i++) {
+          const child = clause.namedChild(i);
+          if (!child) continue;
+          if (child.type === 'export_specifier') {
+            const nameNode = child.childForFieldName('name');
+            const aliasNode = child.childForFieldName('alias');
+            const importedName = nameNode?.text ?? '';
+            const localName = aliasNode?.text ?? importedName;
+            if (localName) bindings.push({ modulePath: moduleName, importedName, localName });
           }
         }
       }
@@ -104,48 +194,225 @@ function collectImportMap(context: CallGraphContext): Map<string, string> {
     }
   };
   visit(context.root);
-  return imports;
+  return bindings;
 }
 
-function resolveModulePath(fromFile: string, specifier: string): string {
-  if (!specifier) return specifier;
-  if (specifier.startsWith('.')) {
-    const resolved = path.normalize(path.join(path.dirname(fromFile), specifier));
-    return toPosixPath(resolved);
+function collectCommonJsImports(context: CallGraphContext): ImportBinding[] {
+  const bindings: ImportBinding[] = [];
+  const visit = (node: Parser.SyntaxNode) => {
+    if (node.type === 'call_expression') {
+      const callee = node.childForFieldName('function') ?? node.namedChild(0);
+      if (callee?.type === 'identifier' && callee.text === 'require') {
+        const args = node.childForFieldName('arguments');
+        const arg = args?.namedChild(0);
+        if (arg?.type === 'string') {
+          const moduleName = arg.text.replace(/['"]/g, '');
+          const parent = node.parent;
+          if (parent?.type === 'variable_declarator') {
+            const nameNode = parent.childForFieldName('name');
+            if (nameNode?.type === 'identifier') {
+              bindings.push({ modulePath: moduleName, importedName: 'default', localName: nameNode.text });
+            }
+          }
+        }
+      }
+    }
+    for (let i = 0; i < node.childCount; i++) {
+      const child = node.child(i);
+      if (child) visit(child);
+    }
+  };
+  visit(context.root);
+  return bindings;
+}
+
+function collectFunctionScopes(context: CallGraphContext, symbolTable: Map<string, SymbolEntry>): FunctionInfo[] {
+  const funcs: FunctionInfo[] = [];
+  const visit = (node: Parser.SyntaxNode) => {
+    if (FUNCTION_NODE_TYPES.has(node.type)) {
+      const nameNode = node.childForFieldName('name');
+      if (nameNode) {
+        const symbol = symbolTable.get(nameNode.text);
+        const id = symbol?.id ?? symbolNodeId(toPosixPath(context.filePath), {
+          name: nameNode.text,
+          kind: node.type === 'method_definition' ? 'method' : 'function',
+          signature: node.text.split('{')[0].trim(),
+          startLine: node.startPosition.row + 1,
+          endLine: node.endPosition.row + 1,
+        });
+        funcs.push({
+          id,
+          name: nameNode.text,
+          filePath: toPosixPath(context.filePath),
+          startLine: node.startPosition.row + 1,
+          endLine: node.endPosition.row + 1,
+        });
+      }
+    }
+    if (node.type === 'class_declaration') {
+      const nameNode = node.childForFieldName('name');
+      if (nameNode) {
+        const symbol = symbolTable.get(nameNode.text);
+        const id = symbol?.id ?? symbolNodeId(toPosixPath(context.filePath), {
+          name: nameNode.text,
+          kind: 'class',
+          signature: `class ${nameNode.text}`,
+          startLine: node.startPosition.row + 1,
+          endLine: node.endPosition.row + 1,
+        });
+        funcs.push({
+          id,
+          name: nameNode.text,
+          filePath: toPosixPath(context.filePath),
+          startLine: node.startPosition.row + 1,
+          endLine: node.endPosition.row + 1,
+        });
+      }
+    }
+    for (let i = 0; i < node.childCount; i++) {
+      const child = node.child(i);
+      if (child) visit(child);
+    }
+  };
+  visit(context.root);
+  return funcs;
+}
+
+function findNearestFunction(node: Parser.SyntaxNode, symbolTable: Map<string, SymbolEntry>, filePath: string): FunctionScope | null {
+  let current: Parser.SyntaxNode | null = node;
+  while (current) {
+    if (FUNCTION_NODE_TYPES.has(current.type)) {
+      const nameNode = current.childForFieldName('name');
+      if (nameNode) {
+        const symbol = symbolTable.get(nameNode.text);
+        const id = symbol?.id ?? symbolNodeId(toPosixPath(filePath), {
+          name: nameNode.text,
+          kind: current.type === 'method_definition' ? 'method' : 'function',
+          signature: current.text.split('{')[0].trim(),
+          startLine: current.startPosition.row + 1,
+          endLine: current.endPosition.row + 1,
+        });
+        return { id, name: nameNode.text };
+      }
+    }
+    current = current.parent;
   }
-  return specifier;
+  return null;
 }
 
-export function buildCallGraph(contexts: CallGraphContext[]): GraphLayer {
+function extractCalleeName(node: Parser.SyntaxNode): string | null {
+  if (node.type === 'identifier') return node.text;
+  if (node.type === 'member_expression' || node.type === 'optional_chain') {
+    const prop = node.childForFieldName('property');
+    if (prop) return prop.text;
+    const last = node.namedChild(node.namedChildCount - 1);
+    if (last) return last.text;
+  }
+  return null;
+}
+
+function resolveCallTarget(
+  calleeNode: Parser.SyntaxNode,
+  importBindings: ImportBinding[],
+  symbolTable: Map<string, SymbolEntry>,
+): SymbolEntry | null {
+  if (calleeNode.type === 'identifier') {
+    const direct = symbolTable.get(calleeNode.text);
+    if (direct) return direct;
+    const imported = importBindings.find((binding) => binding.localName === calleeNode.text);
+    if (imported) {
+      const resolvedName = imported.importedName === 'default' ? imported.localName : imported.importedName;
+      return symbolTable.get(resolvedName) ?? null;
+    }
+  }
+
+  if (calleeNode.type === 'member_expression' || calleeNode.type === 'optional_chain') {
+    const objectNode = calleeNode.childForFieldName('object');
+    const propNode = calleeNode.childForFieldName('property') ?? calleeNode.namedChild(calleeNode.namedChildCount - 1);
+    if (objectNode?.type === 'identifier') {
+      const binding = importBindings.find((entry) => entry.localName === objectNode.text);
+      if (binding) {
+        const resolved = propNode ? symbolTable.get(propNode.text) : null;
+        return resolved ?? null;
+      }
+    }
+    if (propNode?.type === 'identifier') {
+      return symbolTable.get(propNode.text) ?? null;
+    }
+  }
+
+  const fallback = extractCalleeName(calleeNode);
+  if (fallback) return symbolTable.get(fallback) ?? null;
+  return null;
+}
+
+function buildCallGraphLayer(contexts: CallGraphContext[]): { graph: CallGraph; layer: GraphLayer } {
   const nodes: CPENode[] = [];
   const edges: CPEEdge[] = [];
   const edgeTypes = [EdgeType.CALLS, EdgeType.DEFINES];
+  const functions = new Map<string, FunctionInfo>();
+  const calls: CallEdge[] = [];
+  const imports: ImportEdge[] = [];
 
   const symbolTable = collectSymbolTable(contexts);
 
   for (const ctx of contexts) {
-    const importMap = collectImportMap(ctx);
+    const filePosix = toPosixPath(ctx.filePath);
+    const moduleId = moduleNodeId(filePosix);
+    const importBindings = [...collectImports(ctx), ...collectCommonJsImports(ctx)];
+    const importsByModule = new Map<string, Set<string>>();
+    for (const binding of importBindings) {
+      const resolved = resolveModulePath(filePosix, binding.modulePath);
+      const set = importsByModule.get(resolved) ?? new Set<string>();
+      set.add(binding.importedName || binding.localName);
+      importsByModule.set(resolved, set);
+    }
+    for (const [toFile, symbols] of importsByModule) {
+      imports.push({ fromFile: filePosix, toFile, importedSymbols: Array.from(symbols.values()) });
+    }
+
+    const fileFunctions = collectFunctionScopes(ctx, symbolTable);
+    for (const fn of fileFunctions) {
+      functions.set(fn.id, fn);
+      nodes.push({ id: fn.id, kind: 'symbol', label: fn.name, file: fn.filePath, startLine: fn.startLine, endLine: fn.endLine });
+    }
+
     const visit = (node: Parser.SyntaxNode) => {
       if (node.type === 'call_expression') {
-        const fn = node.childForFieldName('function') ?? node.namedChild(0);
-        if (fn && fn.type === 'identifier') {
-          const target = symbolTable.get(fn.text);
-          if (target) {
-            const callerId = moduleNodeId(toPosixPath(ctx.filePath));
-            const calleeId = target.id;
-            edges.push({ from: callerId, to: calleeId, type: EdgeType.CALLS });
+        const fnNode = node.childForFieldName('function') ?? node.namedChild(0);
+        if (fnNode) {
+          const resolved = resolveCallTarget(fnNode, importBindings, symbolTable);
+          if (resolved) {
+            const caller = findNearestFunction(node, symbolTable, ctx.filePath) ?? { id: moduleId, name: filePosix };
+            edges.push({ from: caller.id, to: resolved.id, type: EdgeType.CALLS });
+            calls.push({ from: caller.id, to: resolved.id, line: node.startPosition.row + 1 });
           }
         }
       }
-      if (node.type === 'export_statement' || node.type === 'export_default_declaration') {
+      if (node.type === 'new_expression') {
+        const ctor = node.childForFieldName('constructor') ?? node.namedChild(0);
+        if (ctor) {
+          const resolved = resolveCallTarget(ctor, importBindings, symbolTable);
+          if (resolved) {
+            const caller = findNearestFunction(node, symbolTable, ctx.filePath) ?? { id: moduleId, name: filePosix };
+            edges.push({ from: caller.id, to: resolved.id, type: EdgeType.CALLS });
+            calls.push({ from: caller.id, to: resolved.id, line: node.startPosition.row + 1 });
+          }
+        }
+      }
+      if (EXPORT_TYPES.has(node.type)) {
         const decl = node.childForFieldName('declaration');
         const nameNode = decl?.childForFieldName('name');
         if (nameNode) {
           const symbol = symbolTable.get(nameNode.text);
-          if (symbol) {
-            const moduleId = moduleNodeId(toPosixPath(ctx.filePath));
-            edges.push({ from: moduleId, to: symbol.id, type: EdgeType.DEFINES });
-          }
+          if (symbol) edges.push({ from: moduleId, to: symbol.id, type: EdgeType.DEFINES });
+        }
+      }
+      if (node.type === 'class_declaration') {
+        const nameNode = node.childForFieldName('name');
+        if (nameNode) {
+          const symbol = symbolTable.get(nameNode.text);
+          if (symbol) edges.push({ from: moduleId, to: symbol.id, type: EdgeType.DEFINES });
         }
       }
       for (let i = 0; i < node.childCount; i++) {
@@ -153,17 +420,18 @@ export function buildCallGraph(contexts: CallGraphContext[]): GraphLayer {
         if (child) visit(child);
       }
     };
-
     visit(ctx.root);
 
-    nodes.push(createModuleNode(toPosixPath(ctx.filePath)));
-    for (const [, moduleName] of importMap) {
-      if (!moduleName) continue;
-      nodes.push(createModuleNode(resolveModulePath(ctx.filePath, moduleName)));
-    }
+    nodes.push(createModuleNode(filePosix));
   }
 
-  return { nodes, edges, edgeTypes };
+  const graph: CallGraph = { functions, calls, imports };
+  const layer: GraphLayer = { nodes, edges, edgeTypes };
+  return { graph, layer };
+}
+
+export function buildCallGraph(contexts: CallGraphContext[]): GraphLayer {
+  return buildCallGraphLayer(contexts).layer;
 }
 
 export function buildImportGraph(contexts: CallGraphContext[]): GraphLayer {
@@ -216,4 +484,44 @@ export function buildImportGraph(contexts: CallGraphContext[]): GraphLayer {
   }
 
   return { nodes, edges, edgeTypes };
+}
+
+export class CallGraphBuilder {
+  private contexts: CallGraphContext[] = [];
+  private graph: CallGraph | null = null;
+
+  constructor(private repoRoot: string) {}
+
+  addFile(filePath: string, content: string): void {
+    const parser = new Parser();
+    parser.setLanguage(TypeScript.typescript);
+    const tree = parser.parse(content);
+    const filePosix = toPosixPath(path.isAbsolute(filePath) ? filePath : path.join(this.repoRoot, filePath));
+    this.contexts.push({ filePath: filePosix, lang: 'typescript', root: tree.rootNode });
+  }
+
+  build(): CallGraph {
+    if (!this.graph) {
+      this.graph = buildCallGraphLayer(this.contexts).graph;
+    }
+    return this.graph;
+  }
+
+  getCallees(functionId: string): string[] {
+    const graph = this.build();
+    const callees = new Set<string>();
+    for (const call of graph.calls) {
+      if (call.from === functionId) callees.add(call.to);
+    }
+    return Array.from(callees);
+  }
+
+  getCallers(functionId: string): string[] {
+    const graph = this.build();
+    const callers = new Set<string>();
+    for (const call of graph.calls) {
+      if (call.to === functionId) callers.add(call.from);
+    }
+    return Array.from(callers);
+  }
 }
