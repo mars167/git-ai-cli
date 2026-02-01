@@ -1,11 +1,9 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { glob } from 'glob';
-import { CodeParser } from './parser';
+import { IndexingRuntimeConfig, mergeRuntimeConfig } from './indexing/config';
+import { runParallelIndexing } from './indexing/parallel';
 import { defaultDbDir, IndexLang, openTablesByLang } from './lancedb';
-import { sha256Hex } from './crypto';
-import { hashEmbedding } from './embedding';
-import { quantizeSQ8 } from './sq8';
 import { writeAstGraphToCozo } from './astGraph';
 import { ChunkRow, RefRow } from './types';
 import { toPosixPath } from './paths';
@@ -17,6 +15,7 @@ export interface IndexOptions {
   dim: number;
   overwrite: boolean;
   onProgress?: (p: { totalFiles: number; processedFiles: number; currentFile?: string }) => void;
+  config?: Partial<IndexingRuntimeConfig>;
 }
 
 async function loadIgnorePatterns(repoRoot: string, fileName: string): Promise<string[]> {
@@ -37,10 +36,6 @@ async function loadIgnorePatterns(repoRoot: string, fileName: string): Promise<s
     .filter((l): l is string => Boolean(l));
 }
 
-function buildChunkText(file: string, symbol: { name: string; kind: string; signature: string }): string {
-  return `file:${file}\nkind:${symbol.kind}\nname:${symbol.name}\nsignature:${symbol.signature}`;
-}
-
 function inferIndexLang(file: string): IndexLang {
   if (file.endsWith('.md') || file.endsWith('.mdx')) return 'markdown';
   if (file.endsWith('.yml') || file.endsWith('.yaml')) return 'yaml';
@@ -55,10 +50,10 @@ function inferIndexLang(file: string): IndexLang {
 export class IndexerV2 {
   private repoRoot: string;
   private scanRoot: string;
-  private parser: CodeParser;
   private dim: number;
   private overwrite: boolean;
   private onProgress?: IndexOptions['onProgress'];
+  private config: IndexingRuntimeConfig;
 
   constructor(options: IndexOptions) {
     this.repoRoot = path.resolve(options.repoRoot);
@@ -66,7 +61,7 @@ export class IndexerV2 {
     this.dim = options.dim;
     this.overwrite = options.overwrite;
     this.onProgress = options.onProgress;
-    this.parser = new CodeParser();
+    this.config = mergeRuntimeConfig(options.config);
   }
 
   async run(): Promise<void> {
@@ -123,112 +118,26 @@ export class IndexerV2 {
       }
     }
 
-    const chunkRowsByLang: Partial<Record<IndexLang, any[]>> = {};
-    const refRowsByLang: Partial<Record<IndexLang, any[]>> = {};
-    const astFiles: Array<[string, string, string]> = [];
-    const astSymbols: Array<[string, string, string, string, string, string, number, number]> = [];
-    const astContains: Array<[string, string]> = [];
-    const astExtendsName: Array<[string, string]> = [];
-    const astImplementsName: Array<[string, string]> = [];
-    const astRefsName: Array<[string, string, string, string, string, number, number]> = [];
-    const astCallsName: Array<[string, string, string, string, number, number]> = [];
+    const parallelResult = await runParallelIndexing({
+      repoRoot: this.repoRoot,
+      scanRoot: this.scanRoot,
+      dim: this.dim,
+      files,
+      indexing: this.config.indexing,
+      errorHandling: this.config.errorHandling,
+      existingChunkIdsByLang,
+      onProgress: this.onProgress,
+    });
 
-    const totalFiles = files.length;
-    this.onProgress?.({ totalFiles, processedFiles: 0 });
-
-    let processedFiles = 0;
-    for (const file of files) {
-      processedFiles++;
-      const fullPath = path.join(this.scanRoot, file);
-      const filePosix = toPosixPath(file);
-      this.onProgress?.({ totalFiles, processedFiles, currentFile: filePosix });
-      const lang = inferIndexLang(filePosix);
-      if (!chunkRowsByLang[lang]) chunkRowsByLang[lang] = [];
-      if (!refRowsByLang[lang]) refRowsByLang[lang] = [];
-      if (!existingChunkIdsByLang[lang]) existingChunkIdsByLang[lang] = new Set<string>();
-
-      const stat = await fs.stat(fullPath);
-      if (!stat.isFile()) continue;
-
-      const parsed = await this.parser.parseFile(fullPath);
-      const symbols = parsed.symbols;
-      const fileRefs = parsed.refs;
-      const fileId = sha256Hex(`file:${filePosix}`);
-      astFiles.push([fileId, filePosix, lang]);
-
-      const callableScopes: Array<{ refId: string; startLine: number; endLine: number }> = [];
-      for (const s of symbols) {
-        const text = buildChunkText(filePosix, s);
-        const contentHash = sha256Hex(text);
-        const refId = sha256Hex(`${filePosix}:${s.name}:${s.kind}:${s.startLine}:${s.endLine}:${contentHash}`);
-
-        astSymbols.push([refId, filePosix, lang, s.name, s.kind, s.signature, s.startLine, s.endLine]);
-        if (s.kind === 'function' || s.kind === 'method') {
-          callableScopes.push({ refId, startLine: s.startLine, endLine: s.endLine });
-        }
-        let parentId = fileId;
-        if (s.container) {
-          const cText = buildChunkText(filePosix, s.container);
-          const cHash = sha256Hex(cText);
-          parentId = sha256Hex(`${filePosix}:${s.container.name}:${s.container.kind}:${s.container.startLine}:${s.container.endLine}:${cHash}`);
-        }
-        astContains.push([parentId, refId]);
-
-        if (s.kind === 'class') {
-          if (s.extends) {
-            for (const superName of s.extends) astExtendsName.push([refId, superName]);
-          }
-          if (s.implements) {
-            for (const ifaceName of s.implements) astImplementsName.push([refId, ifaceName]);
-          }
-        }
-
-        const existingChunkIds = existingChunkIdsByLang[lang]!;
-        if (!existingChunkIds.has(contentHash)) {
-          const vec = hashEmbedding(text, { dim: this.dim });
-          const q = quantizeSQ8(vec);
-          const row: ChunkRow = {
-            content_hash: contentHash,
-            text,
-            dim: q.dim,
-            scale: q.scale,
-            qvec_b64: Buffer.from(q.q).toString('base64'),
-          };
-          chunkRowsByLang[lang]!.push(row as any);
-          existingChunkIds.add(contentHash);
-        }
-
-        const refRow: RefRow = {
-          ref_id: refId,
-          content_hash: contentHash,
-          file: filePosix,
-          symbol: s.name,
-          kind: s.kind,
-          signature: s.signature,
-          start_line: s.startLine,
-          end_line: s.endLine,
-        };
-        refRowsByLang[lang]!.push(refRow as any);
-      }
-
-      const pickScope = (line: number): string => {
-        let best: { refId: string; span: number } | null = null;
-        for (const s of callableScopes) {
-          if (line < s.startLine || line > s.endLine) continue;
-          const span = s.endLine - s.startLine;
-          if (!best || span < best.span) best = { refId: s.refId, span };
-        }
-        return best ? best.refId : fileId;
-      };
-
-      for (const r of fileRefs) {
-        const fromId = pickScope(r.line);
-        astRefsName.push([fromId, lang, r.name, r.refKind, filePosix, r.line, r.column]);
-        if (r.refKind === 'call' || r.refKind === 'new') {
-          astCallsName.push([fromId, lang, r.name, filePosix, r.line, r.column]);
-        }
-      }
-    }
+    const chunkRowsByLang = parallelResult.chunkRowsByLang;
+    const refRowsByLang = parallelResult.refRowsByLang;
+    const astFiles = parallelResult.astFiles;
+    const astSymbols = parallelResult.astSymbols;
+    const astContains = parallelResult.astContains;
+    const astExtendsName = parallelResult.astExtendsName;
+    const astImplementsName = parallelResult.astImplementsName;
+    const astRefsName = parallelResult.astRefsName;
+    const astCallsName = parallelResult.astCallsName;
 
     const addedByLang: Record<string, { chunksAdded: number; refsAdded: number }> = {};
     for (const lang of languages) {
@@ -236,8 +145,8 @@ export class IndexerV2 {
       if (!t) continue;
       const chunkRows = chunkRowsByLang[lang] ?? [];
       const refRows = refRowsByLang[lang] ?? [];
-      if (chunkRows.length > 0) await t.chunks.add(chunkRows);
-      if (refRows.length > 0) await t.refs.add(refRows);
+      if (chunkRows.length > 0) await t.chunks.add(chunkRows as unknown as Record<string, unknown>[]);
+      if (refRows.length > 0) await t.refs.add(refRows as unknown as Record<string, unknown>[]);
       addedByLang[lang] = { chunksAdded: chunkRows.length, refsAdded: refRows.length };
     }
 

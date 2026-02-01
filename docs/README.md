@@ -38,6 +38,7 @@ This collects all documentation for `git-ai`.
 - [Advanced: Index Archiving & LFS](./zh-CN/advanced.md) (Chinese)
 - [Architecture Design](./zh-CN/design.md) (Chinese)
 - [Development Rules](./zh-CN/rules.md) (Chinese)
+- [Cross-Encoder Reranking](./cross-encoder.md) (English)
 
 ## Agent Integration
 - [MCP Skill & Rule Templates](./zh-CN/mcp.md#agent-skills--rules) (Chinese)
