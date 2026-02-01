@@ -273,9 +273,19 @@ export class OnnxSemanticEmbedder implements SemanticEmbedder {
 }
 
 export function defaultSemanticConfig(): SemanticConfig {
+  // Support environment variable override
+  const modelPath = process.env.GIT_AI_EMBEDDING_MODEL ||
+    path.join(os.homedir(), '.cache', 'git-ai', 'models', 'codebert', 'model.onnx');
+
+  // Auto-detect embedding dimension based on model path
+  let embeddingDim = 768; // Default for CodeBERT
+  if (modelPath.includes('MiniLM')) {
+    embeddingDim = 384; // MiniLM-L6 uses 384 dimensions
+  }
+
   return {
-    modelName: path.join(os.homedir(), '.cache', 'git-ai', 'models', 'codebert', 'model.onnx'),
-    embeddingDim: 768,
+    modelName: modelPath,
+    embeddingDim,
     device: 'cpu',
     batchSize: 4,
   };
