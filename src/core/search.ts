@@ -48,6 +48,12 @@ export function buildAdaptiveQueryPlan(query: string, feedback?: WeightFeedback)
   return { query: q, expanded, queryType, weights };
 }
 
+/**
+ * Runs the adaptive retrieval pipeline: classification -> expansion -> weighting -> fusion -> heuristic reranking.
+ * 
+ * Note: This uses synchronous heuristic reranking. For higher quality but slower reranking using
+ * the ONNX Cross-Encoder, use the `CrossEncoderReranker` class directly (which is async).
+ */
 export function runAdaptiveRetrieval(
   query: string,
   candidates: RetrievalResult[],

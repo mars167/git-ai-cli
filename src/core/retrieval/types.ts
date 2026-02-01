@@ -37,7 +37,7 @@ export interface RankedResult extends RetrievalResult {
 
 export interface AdaptiveRetrieval {
   classifyQuery(query: string): QueryType;
-  expandQuery(query: string): string[];
-  computeWeights(queryType: QueryType): RetrievalWeights;
-  fuseResults(candidates: RetrievalResult[]): RankedResult[];
+  expandQuery(query: string, type?: QueryType): string[];
+  computeWeights(queryType: QueryType, feedback?: Record<string, number>): RetrievalWeights;
+  fuseResults(candidates: RetrievalResult[], weights: RetrievalWeights, limit?: number): RankedResult[];
 }

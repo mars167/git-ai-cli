@@ -25,6 +25,7 @@ function extractEntities(query: string): ExtractedEntity[] {
 
   const symbols = new Set<string>();
   let m: RegExpExecArray | null;
+  SYMBOL_PATTERN.lastIndex = 0;
   while ((m = SYMBOL_PATTERN.exec(query)) !== null) {
     const token = m[1];
     if (!token) continue;

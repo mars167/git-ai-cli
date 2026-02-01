@@ -386,7 +386,8 @@ function extractLogicalOperator(node: Parser.SyntaxNode): string | null {
 function addShortCircuitEdges(root: Parser.SyntaxNode, filePath: string, edges: CPEEdge[]): void {
   const visit = (node: Parser.SyntaxNode) => {
     if (node.type === 'logical_expression' || node.type === 'binary_expression') {
-      buildLogicalExpression(node, filePath, edges);
+      const op = extractLogicalOperator(node);
+      if (op) buildLogicalExpression(node, filePath, edges);
     } else if (node.type === 'conditional_expression' || node.type === 'ternary_expression') {
       buildConditionalExpression(node, filePath, edges);
     }

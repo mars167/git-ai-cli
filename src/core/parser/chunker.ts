@@ -202,9 +202,8 @@ function chunkNode(
     }
   }
   
-  if (childChunks.length > 0) {
+    if (childChunks.length > 0) {
     for (const childChunk of childChunks) {
-      childChunk.astPath = getAstPath(node).concat(childChunk.astPath);
       chunks.push(childChunk);
     }
     
@@ -318,7 +317,7 @@ function createForcedChunks(
         astPath: [...getAstPath(node), 'forced_split'],
         filePath,
         startLine: chunkStartLine,
-        endLine: node.startPosition.row + i,
+        endLine: node.startPosition.row + 1 + i,
         symbolReferences: [],
         relatedChunkIds: [],
         tokenCount: currentChunkTokens,
@@ -329,7 +328,7 @@ function createForcedChunks(
       const overlapStart = Math.max(0, currentChunkLines.length - Math.ceil(config.overlapTokens / 10));
       currentChunkLines = currentChunkLines.slice(overlapStart);
       currentChunkTokens = currentChunkLines.reduce((sum, l) => sum + countTokens(l), 0);
-      chunkStartLine = node.startPosition.row + i - overlapStart;
+      chunkStartLine = node.startPosition.row + 1 + i - overlapStart;
     }
     
     currentChunkLines.push(lines[i]);
