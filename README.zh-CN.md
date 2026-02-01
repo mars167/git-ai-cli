@@ -5,8 +5,29 @@
 [![license](https://img.shields.io/github/license/mars167/git-ai-cli)](./LICENSE)
 [![npm version](https://img.shields.io/npm/v/@mars167/git-ai)](https://www.npmjs.com/package/@mars167/git-ai)
 [![npm downloads](https://img.shields.io/npm/dm/@mars167/git-ai)](https://www.npmjs.com/package/@mars167/git-ai)
+[![Agent Skill](https://img.shields.io/badge/Agent_Skill-git--ai--mcp-blue)](https://skills.sh)
 
 **简体中文** | [English](./README.md)
+
+---
+
+<div align="center">
+
+### 🚀 快速安装
+
+**AI Agent 技能安装 (Claude Code, Cursor, Windsurf 等)**
+
+```bash
+npx skills add mars167/git-ai-cli/skills/git-ai-mcp
+```
+
+**CLI 工具安装**
+
+```bash
+npm install -g @mars167/git-ai
+```
+
+</div>
 
 ---
 
