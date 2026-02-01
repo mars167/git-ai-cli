@@ -5,6 +5,9 @@ import { IndexingRuntimeConfig, mergeRuntimeConfig } from './indexing/config';
 import { runParallelIndexing } from './indexing/parallel';
 import { defaultDbDir, IndexLang, openTablesByLang } from './lancedb';
 import { writeAstGraphToCozo } from './astGraph';
+import { ChunkRow, RefRow } from './types';
+import { toPosixPath } from './paths';
+import { getCurrentCommitHash } from './git';
 
 export interface IndexOptions {
   repoRoot: string;
@@ -157,6 +160,8 @@ export class IndexerV2 {
       calls_name: astCallsName,
     });
 
+    const commitHash = await getCurrentCommitHash(this.repoRoot);
+
     const meta = {
       version: '2.1',
       index_schema_version: 3,
@@ -168,6 +173,7 @@ export class IndexerV2 {
       languages,
       dbDir: path.relative(this.repoRoot, dbDir),
       scanRoot: path.relative(this.repoRoot, this.scanRoot),
+      ...(commitHash ? { commit_hash: commitHash } : {}),
       astGraph: astGraph.enabled
         ? {
           backend: 'cozo',

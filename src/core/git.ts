@@ -30,3 +30,13 @@ export function inferWorkspaceRoot(repoRoot: string): string | null {
   }
   return null;
 }
+
+export async function getCurrentCommitHash(repoRoot: string): Promise<string | null> {
+  try {
+    const git = simpleGit(repoRoot);
+    const hash = await git.raw(['rev-parse', 'HEAD']);
+    return hash.trim();
+  } catch {
+    return null;
+  }
+}
