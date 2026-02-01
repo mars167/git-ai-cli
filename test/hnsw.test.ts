@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import os from 'os';
 import path from 'path';
 import fs from 'fs-extra';
+// @ts-ignore dist module has no typings
 import { HNSWIndex } from '../dist/src/core/indexing/hnsw.js';
+// @ts-ignore dist module has no typings
 import { quantizeSQ8 } from '../dist/src/core/sq8.js';
 
 function makeVector(dim: number, seed: number): number[] {

@@ -46,9 +46,9 @@ test('CFG builder handles branches, loops, and switch', () => {
   assert.ok(cfg.edges.length > 0);
   assert.ok(cfg.entryPoint.length > 0);
   assert.ok(cfg.exitPoints.length > 0);
-  assert.ok(cfg.edges.some((edge) => edge.edgeType === 'TRUE_BRANCH'));
-  assert.ok(cfg.edges.some((edge) => edge.edgeType === 'FALSE_BRANCH'));
-  assert.ok(cfg.edges.some((edge) => edge.edgeType === 'FALLTHROUGH'));
+  assert.ok(cfg.edges.some((edge: any) => edge.edgeType === 'TRUE_BRANCH'));
+  assert.ok(cfg.edges.some((edge: any) => edge.edgeType === 'FALSE_BRANCH'));
+  assert.ok(cfg.edges.some((edge: any) => edge.edgeType === 'FALLTHROUGH'));
 });
 
 test('CFG builder captures short-circuit expressions', () => {
@@ -58,8 +58,8 @@ test('CFG builder captures short-circuit expressions', () => {
     }
   `;
   const cfg = buildCFG('short.ts', content);
-  assert.ok(cfg.edges.some((edge) => edge.edgeType === 'TRUE_BRANCH'));
-  assert.ok(cfg.edges.some((edge) => edge.edgeType === 'FALSE_BRANCH'));
+  assert.ok(cfg.edges.some((edge: any) => edge.edgeType === 'TRUE_BRANCH'));
+  assert.ok(cfg.edges.some((edge: any) => edge.edgeType === 'FALSE_BRANCH'));
 });
 
 test('DFG builder captures definitions and uses', () => {
@@ -75,7 +75,7 @@ test('DFG builder captures definitions and uses', () => {
   const dfg = buildDFG('dfg.ts', content);
   assert.ok(dfg.nodes.length > 0);
   assert.ok(dfg.edges.length > 0);
-  const totalNode = dfg.nodes.find((node) => node.varName === 'total');
+  const totalNode = dfg.nodes.find((node: any) => node.varName === 'total');
   assert.ok(totalNode);
   assert.ok(totalNode!.useLines.length >= 1);
 });
@@ -95,9 +95,9 @@ test('CallGraphBuilder links calls across files and imports', () => {
     }
   `);
   const graph = builder.build();
-  const functions = Array.from(graph.functions.values());
-  const helper = functions.find((fn) => fn.name === 'helper');
-  const run = functions.find((fn) => fn.name === 'run');
+  const functions = Array.from(graph.functions.values()) as any[];
+  const helper = functions.find((fn: any) => fn.name === 'helper');
+  const run = functions.find((fn: any) => fn.name === 'run');
   assert.ok(helper && run);
   const callees = builder.getCallees(run!.id);
   assert.ok(callees.includes(helper!.id));

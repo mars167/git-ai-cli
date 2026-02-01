@@ -1,3 +1,5 @@
+import { test } from 'node:test';
+import assert from 'node:assert';
 import Parser from 'tree-sitter';
 import TypeScript from 'tree-sitter-typescript';
 
@@ -9,28 +11,17 @@ const {
   defaultChunkingConfig,
 } = chunkerModule;
 
-console.log('Testing AST-aware chunking...\n');
-
-function test(name, fn) {
-  try {
-    fn();
-    console.log(`✓ ${name}`);
-  } catch (e) {
-    console.log(`✗ ${name}: ${e.message}`);
-    process.exit(1);
-  }
-}
-
 test('countTokens counts basic words', () => {
   const text = 'function hello world test';
   const count = countTokens(text);
-  console.log(`  countTokens("${text}") = ${count}`);
+  assert.strictEqual(count, 4);
 });
 
 test('countTokens handles code', () => {
   const code = 'const foo: string = "bar";';
   const count = countTokens(code);
-  console.log(`  code tokens: ${count}`);
+  // 'const', 'foo:', 'string', '=', '"bar";' -> 5 tokens by split(/\s+/)
+  assert.strictEqual(count, 5);
 });
 
 test('astAwareChunking handles simple function', () => {
@@ -46,13 +37,8 @@ function hello() {
   
   const result = astAwareChunking(tree, 'test.ts', defaultChunkingConfig);
   
-  console.log(`  Simple function: ${result.totalChunks} chunks, ${result.totalTokens} tokens`);
-  
-  if (result.chunks.length > 0) {
-    const first = result.chunks[0];
-    console.log(`  First chunk: ${first.nodeType}, lines ${first.startLine}-${first.endLine}`);
-    console.log(`  AST path: ${first.astPath.join(' > ')}`);
-  }
+  assert.ok(result.totalChunks > 0);
+  assert.strictEqual(result.chunks[0].nodeType, 'function_declaration');
 });
 
 test('astAwareChunking handles class with methods', () => {
@@ -76,10 +62,10 @@ class User {
   
   const result = astAwareChunking(tree, 'user.ts', defaultChunkingConfig);
   
-  console.log(`  Class with methods: ${result.totalChunks} chunks, ${result.totalTokens} tokens`);
-  
-  const chunkTypes = result.chunks.map(c => c.nodeType);
-  console.log(`  Chunk types: ${chunkTypes.join(', ')}`);
+  assert.ok(result.totalChunks > 0);
+  // Logic: if (tokenCount <= config.maxTokens) return [chunk];
+  // So likely 1 chunk 'class_declaration'.
+  assert.strictEqual(result.chunks[0].nodeType, 'class_declaration');
 });
 
 test('astAwareChunking respects maxTokens', () => {
@@ -101,7 +87,5 @@ test('astAwareChunking respects maxTokens', () => {
     maxTokens: 200,
   });
   
-  console.log(`  Large function: ${result.totalChunks} chunks (should be > 1)`);
+  assert.ok(result.totalChunks > 1, 'Should split large function');
 });
-
-console.log('\nAll tests passed!');

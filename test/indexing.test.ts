@@ -3,9 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+// @ts-ignore dist module has no typings
 import { runParallelIndexing } from '../dist/src/core/indexing/parallel.js';
+// @ts-ignore dist module has no typings
 import { defaultIndexingConfig, defaultErrorHandlingConfig } from '../dist/src/core/indexing/config.js';
+// @ts-ignore dist module has no typings
 import { HNSWIndex } from '../dist/src/core/indexing/hnsw.js';
+// @ts-ignore dist module has no typings
 import { quantizeSQ8 } from '../dist/src/core/sq8.js';
 
 async function createTempDir(): Promise<string> {

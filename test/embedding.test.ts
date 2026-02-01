@@ -24,7 +24,7 @@ test('semantic embedder returns normalized vector', async () => {
   const embedder = new OnnxSemanticEmbedder(config);
   const vec = await embedder.embed('export function alpha() { return 1; }');
   assert.equal(vec.length, 32);
-  const norm = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0));
+  const norm = Math.sqrt(vec.reduce((sum: any, v: any) => sum + v * v, 0));
   assert.ok(norm > 0.9 && norm < 1.1);
 });
 
@@ -62,7 +62,7 @@ test('fusion combines multiple vectors', () => {
   });
   const vec = fusion.fuse([1, 0], [0, 1], [1, 1]);
   assert.equal(vec.length, 2);
-  const norm = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0));
+  const norm = Math.sqrt(vec.reduce((sum: any, v: any) => sum + v * v, 0));
   assert.ok(norm > 0.9 && norm < 1.1);
 });
 

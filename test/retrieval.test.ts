@@ -33,7 +33,7 @@ test('classifyQuery identifies structural intent', () => {
 });
 
 test('expandQuery resolves abbreviations and synonyms', () => {
-  const expanded = expandQuery('auth cfg');
+  const expanded = expandQuery('auth cfg') as string[];
   assert.ok(expanded.some((e) => e.includes('authentication')));
   assert.ok(expanded.some((e) => e.includes('configuration')));
 });
