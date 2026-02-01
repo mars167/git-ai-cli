@@ -10,10 +10,16 @@ on:
         description: "Tag name to release (e.g. v1.2.3). If empty, skip release/publish steps."
         required: false
         type: string
+      npm_only:
+        description: "Only publish to npm (skip GitHub Packages)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   build-and-publish:
@@ -33,12 +39,15 @@ jobs:
       - name: Setup Node (build/test)
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: package-lock.json
 
       - name: Install
         run: npm ci
+
+      - name: Build
+        run: npm run build
 
       - name: Test
         run: npm test
@@ -68,33 +77,55 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           files: ${{ steps.pack.outputs.tarball }}
+          generate_release_notes: true
 
       - name: Setup Node (GitHub Packages)
-        if: ${{ env.RELEASE_TAG != '' }}
+        if: ${{ env.RELEASE_TAG != '' && inputs.npm_only != true }}
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           registry-url: "https://npm.pkg.github.com"
           scope: "@${{ github.repository_owner }}"
 
-      - name: Publish to GitHub Packages (npm.pkg.github.com)
-        if: ${{ env.RELEASE_TAG != '' }}
+      - name: Publish to GitHub Packages
+        if: ${{ env.RELEASE_TAG != '' && inputs.npm_only != true }}
         run: |
           npm pkg set name="@${{ github.repository_owner }}/git-ai"
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Restore package name for npmjs
+        if: ${{ env.RELEASE_TAG != '' }}
+        run: |
+          npm pkg set name="git-ai"
+
       - name: Setup Node (npmjs.org)
         if: ${{ env.RELEASE_TAG != '' }}
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Publish to npmjs.org (optional)
+      - name: Publish to npmjs.org
+        if: ${{ env.RELEASE_TAG != '' }}
+        run: |
+          npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        if: ${{ env.RELEASE_TAG != '' && env.NODE_AUTH_TOKEN != '' }}
+
+      - name: Publish Summary
+        if: ${{ env.RELEASE_TAG != '' }}
         run: |
-          npm publish --access public
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ env.RELEASE_TAG }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Published to:" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] GitHub Packages: \`@${{ github.repository_owner }}/git-ai\`" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] npmjs.org: \`git-ai\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Install:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "npm install -g git-ai" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
