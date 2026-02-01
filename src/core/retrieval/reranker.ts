@@ -270,7 +270,7 @@ export class CrossEncoderReranker implements Reranker {
   private cache: Cache;
   private model: CrossEncoderModel;
 
-  constructor(config: RerankerConfig, cache: Cache = new LruCache(256)) {
+  constructor(config: RerankerConfig, cache: Cache = new LruCache(256) as Cache) {
     this.config = config;
     this.cache = cache;
     this.model = new CrossEncoderModel(config, cache);
