@@ -15,6 +15,11 @@ on:
         required: false
         type: boolean
         default: false
+      skip_github_release:
+        description: "Skip GitHub Release creation (useful for npm retry)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -65,14 +70,29 @@ jobs:
           TARBALL="$(npm pack --silent)"
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
 
+      # Check if GitHub Release already exists
+      - name: Check existing GitHub Release
+        if: ${{ env.RELEASE_TAG != '' }}
+        id: check_release
+        run: |
+          if gh release view "${{ env.RELEASE_TAG }}" &>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Release ${{ env.RELEASE_TAG }} already exists, skipping creation"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload Tarball Artifact
         uses: actions/upload-artifact@v4
         with:
           name: npm-tarball
           path: ${{ steps.pack.outputs.tarball }}
+          overwrite: true
 
       - name: Create GitHub Release (attach tarball)
-        if: ${{ env.RELEASE_TAG != '' }}
+        if: ${{ env.RELEASE_TAG != '' && steps.check_release.outputs.exists != 'true' && inputs.skip_github_release != true }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
@@ -89,9 +109,18 @@ jobs:
 
       - name: Publish to GitHub Packages
         if: ${{ env.RELEASE_TAG != '' && inputs.npm_only != true }}
+        continue-on-error: true
+        id: publish_github
         run: |
           npm pkg set name="@${{ github.repository_owner }}/git-ai"
-          npm publish --access public
+          npm publish --access public 2>&1 | tee publish_output.txt
+          if grep -q "You cannot publish over the previously published versions" publish_output.txt; then
+            echo "::notice::Version already exists on GitHub Packages, skipping"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+          elif [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "::error::Failed to publish to GitHub Packages"
+            exit 1
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -109,8 +138,19 @@ jobs:
 
       - name: Publish to npmjs.org
         if: ${{ env.RELEASE_TAG != '' }}
+        id: publish_npm
         run: |
-          npm publish --access public --provenance
+          npm publish --access public --provenance 2>&1 | tee publish_output.txt || true
+          if grep -q "You cannot publish over the previously published versions" publish_output.txt; then
+            echo "::notice::Version already exists on npmjs.org, skipping"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+          elif grep -q "npm error" publish_output.txt; then
+            echo "::error::Failed to publish to npmjs.org"
+            cat publish_output.txt
+            exit 1
+          else
+            echo "skipped=false" >> "$GITHUB_OUTPUT"
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -121,9 +161,24 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ env.RELEASE_TAG }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### GitHub Release:" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check_release.outputs.exists }}" == "true" ] || [ "${{ inputs.skip_github_release }}" == "true" ]; then
+            echo "- [x] Already exists (skipped)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- [x] Created" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Published to:" >> $GITHUB_STEP_SUMMARY
-          echo "- [x] GitHub Packages: \`@${{ github.repository_owner }}/git-ai\`" >> $GITHUB_STEP_SUMMARY
-          echo "- [x] npmjs.org: \`@mars167/git-ai\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.publish_github.outputs.skipped }}" == "true" ]; then
+            echo "- [x] GitHub Packages: \`@${{ github.repository_owner }}/git-ai\` (already exists)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- [x] GitHub Packages: \`@${{ github.repository_owner }}/git-ai\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ steps.publish_npm.outputs.skipped }}" == "true" ]; then
+            echo "- [x] npmjs.org: \`@mars167/git-ai\` (already exists)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- [x] npmjs.org: \`@mars167/git-ai\`" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Install:" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
