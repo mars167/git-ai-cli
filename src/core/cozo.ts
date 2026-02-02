@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 
 export interface CozoClient {
-  backend: 'cozo-node' | 'cozo-wasm';
+  backend: 'cozo-node';
   run: (script: string, params?: Record<string, any>) => Promise<any>;
   exportRelations?: (relations: string[]) => Promise<any>;
   importRelations?: (data: any) => Promise<any>;
@@ -18,8 +18,6 @@ export function repoAstGraphDbPath(repoRoot: string): string {
 export function repoAstGraphExportPath(repoRoot: string): string {
   return path.join(repoRoot, '.git-ai', 'ast-graph.export.json');
 }
-
-let cozoWasmInit: Promise<void> | null = null;
 
 async function tryImportFromExport(repoRoot: string, client: CozoClient): Promise<void> {
   if (!client.importRelations) return;
@@ -47,7 +45,15 @@ async function openCozoNode(repoRoot: string): Promise<CozoClient> {
     const moduleName: string = 'cozo-node';
     mod = await import(moduleName);
   } catch (e: any) {
-    throw new Error(`Failed to load cozo-node: ${String(e?.message ?? e)}`);
+    const msg = String(e?.message ?? e);
+    // Provide helpful error message for common installation issues
+    const hint = msg.includes('Cannot find') || msg.includes('not found')
+      ? '\n\nTroubleshooting:\n' +
+        '1. For China users: npm install --cozo_node_prebuilt_binary_host_mirror=https://gitee.com/cozodb/cozo-lib-nodejs/releases/download/\n' +
+        '2. Check network/proxy settings\n' +
+        '3. Manual download: https://github.com/cozodb/cozo-lib-nodejs/releases'
+      : '';
+    throw new Error(`Failed to load cozo-node: ${msg}${hint}`);
   }
 
   const CozoDb = mod?.CozoDb ?? mod?.default?.CozoDb ?? mod?.default ?? mod;
@@ -80,68 +86,6 @@ async function openCozoNode(repoRoot: string): Promise<CozoClient> {
     importRelations: typeof db.importRelations === 'function' ? async (data: any) => db.importRelations(data) : undefined,
     close: typeof db.close === 'function' ? async () => { await db.close(); } : undefined,
   };
-  await tryImportFromExport(repoRoot, client);
-  return client;
-}
-
-async function openCozoWasm(repoRoot: string): Promise<CozoClient> {
-  let mod: any;
-  try {
-    const moduleName: string = 'cozo-lib-wasm';
-    mod = await import(moduleName);
-  } catch (e: any) {
-    throw new Error(`Failed to load cozo-lib-wasm: ${String(e?.message ?? e)}`);
-  }
-
-  const init = mod?.default;
-  const CozoDb = mod?.CozoDb;
-  if (typeof init !== 'function' || typeof CozoDb?.new !== 'function') {
-    throw new Error('cozo-lib-wasm loaded but exports are not compatible');
-  }
-
-  if (!cozoWasmInit) cozoWasmInit = Promise.resolve(init()).then(() => {});
-  await cozoWasmInit;
-
-  const db: any = CozoDb.new();
-
-  const run = async (script: string, params?: Record<string, any>) => {
-    const out = db.run(String(script), JSON.stringify(params ?? {}));
-    try {
-      return JSON.parse(String(out));
-    } catch {
-      return out;
-    }
-  };
-
-  const exportRelations = async (relations: string[]) => {
-    if (typeof db.export_relations !== 'function') return null;
-    const out = db.export_relations(JSON.stringify(relations));
-    try {
-      return JSON.parse(String(out));
-    } catch {
-      return out;
-    }
-  };
-
-  const importRelations = async (data: any) => {
-    if (typeof db.import_relations !== 'function') return null;
-    const out = db.import_relations(JSON.stringify(data));
-    try {
-      return JSON.parse(String(out));
-    } catch {
-      return out;
-    }
-  };
-
-  const client: CozoClient = {
-    backend: 'cozo-wasm',
-    engine: 'mem',
-    run,
-    exportRelations,
-    importRelations,
-    close: typeof db.free === 'function' ? async () => { db.free(); } : undefined,
-  };
-
   await tryImportFromExport(repoRoot, client);
   return client;
 }
@@ -185,65 +129,15 @@ export async function openCozoDbAtPath(dbPath: string, exportPath?: string): Pro
     errors.push(String(e?.message ?? e));
   }
 
-  try {
-    const moduleName: string = 'cozo-lib-wasm';
-    const mod = await import(moduleName);
-    const init = mod?.default;
-    const CozoDb = mod?.CozoDb;
-    if (typeof init !== 'function' || typeof CozoDb?.new !== 'function') {
-      throw new Error('cozo-lib-wasm loaded but exports are not compatible');
-    }
-
-    if (!cozoWasmInit) cozoWasmInit = Promise.resolve(init()).then(() => {});
-    await cozoWasmInit;
-
-    const db: any = CozoDb.new();
-    const run = async (script: string, params?: Record<string, any>) => {
-      const out = db.run(String(script), JSON.stringify(params ?? {}));
-      try {
-        return JSON.parse(String(out));
-      } catch {
-        return out;
-      }
-    };
-
-    const exportRelations = async (relations: string[]) => {
-      if (typeof db.export_relations !== 'function') return null;
-      const out = db.export_relations(JSON.stringify(relations));
-      try {
-        return JSON.parse(String(out));
-      } catch {
-        return out;
-      }
-    };
-
-    const importRelations = async (data: any) => {
-      if (typeof db.import_relations !== 'function') return null;
-      const out = db.import_relations(JSON.stringify(data));
-      try {
-        return JSON.parse(String(out));
-      } catch {
-        return out;
-      }
-    };
-
-    const client: CozoClient = {
-      backend: 'cozo-wasm',
-      engine: 'mem',
-      run,
-      exportRelations,
-      importRelations,
-      close: typeof db.free === 'function' ? async () => { db.free(); } : undefined,
-    };
-
-    await tryImportFromExportPath(exportPath, client);
-    return client;
-  } catch (e: any) {
-    errors.push(String(e?.message ?? e));
-  }
-
   await fs.ensureDir(path.dirname(dbPath));
-  await fs.writeJSON(path.join(path.dirname(dbPath), 'cozo.error.json'), { errors }, { spaces: 2 }).catch(() => {});
+  await fs.writeJSON(path.join(path.dirname(dbPath), 'cozo.error.json'), { 
+    errors,
+    troubleshooting: {
+      gitee_mirror: 'npm install --cozo_node_prebuilt_binary_host_mirror=https://gitee.com/cozodb/cozo-lib-nodejs/releases/download/',
+      manual_download: 'https://github.com/cozodb/cozo-lib-nodejs/releases',
+      docs: 'https://github.com/mars167/git-ai-cli#troubleshooting'
+    }
+  }, { spaces: 2 }).catch(() => {});
   return null;
 }
 
@@ -254,12 +148,14 @@ export async function openRepoCozoDb(repoRoot: string): Promise<CozoClient | nul
   } catch (e: any) {
     errors.push(String(e?.message ?? e));
   }
-  try {
-    return await openCozoWasm(repoRoot);
-  } catch (e: any) {
-    errors.push(String(e?.message ?? e));
-  }
   await fs.ensureDir(path.join(repoRoot, '.git-ai'));
-  await fs.writeJSON(path.join(repoRoot, '.git-ai', 'cozo.error.json'), { errors }, { spaces: 2 }).catch(() => {});
+  await fs.writeJSON(path.join(repoRoot, '.git-ai', 'cozo.error.json'), { 
+    errors,
+    troubleshooting: {
+      gitee_mirror: 'npm install --cozo_node_prebuilt_binary_host_mirror=https://gitee.com/cozodb/cozo-lib-nodejs/releases/download/',
+      manual_download: 'https://github.com/cozodb/cozo-lib-nodejs/releases',
+      docs: 'https://github.com/mars167/git-ai-cli#troubleshooting'
+    }
+  }, { spaces: 2 }).catch(() => {});
   return null;
 }

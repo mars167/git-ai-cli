@@ -80,7 +80,8 @@
     "tree-sitter-typescript": "^0.21.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "zod": "^4.3.5"
+    "zod": "^4.3.5",
+    "cozo-node": "^0.7.6"
   },
   "optionalDependencies": {
     "@lancedb/lancedb-darwin-arm64": "0.22.3",
@@ -90,8 +91,6 @@
     "@lancedb/lancedb-linux-x64-gnu": "0.22.3",
     "@lancedb/lancedb-linux-x64-musl": "0.22.3",
     "@lancedb/lancedb-win32-arm64-msvc": "0.22.3",
-    "@lancedb/lancedb-win32-x64-msvc": "0.22.3",
-    "cozo-lib-wasm": "^0.7.6",
-    "cozo-node": "^0.7.6"
+    "@lancedb/lancedb-win32-x64-msvc": "0.22.3"
   }
 }
