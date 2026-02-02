@@ -392,7 +392,7 @@ git lfs pull
 
 Skill 模版定义了 Agent 如何使用 git-ai 工具的最佳实践。
 
-**位置**：`templates/agents/common/skills/git-ai-mcp/SKILL.md`
+**位置**：`templates/agents/common/skills/git-ai-code-search/SKILL.md`
 
 **核心内容**：
 - 推荐工作流程（7 步）
@@ -404,7 +404,7 @@ Skill 模版定义了 Agent 如何使用 git-ai 工具的最佳实践。
 
 Rule 模版定义了 Agent 使用 git-ai 工具时的行为约束。
 
-**位置**：`templates/agents/common/rules/git-ai-mcp/RULE.md`
+**位置**：`templates/agents/common/rules/git-ai-code-search/RULE.md`
 
 **核心内容**：
 - 必须遵守的规则（must_follow）

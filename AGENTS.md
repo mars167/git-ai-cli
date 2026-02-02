@@ -1,8 +1,8 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-01-31 23:03
-**Commit:** 680e8f2
-**Branch:** copilot/add-index-commit-id-feature
+**Generated:** 2026-02-02 01:45
+**Commit:** bd3baf8
+**Branch:** refactor/cli-commands-architecture
 
 ## OVERVIEW
 git-ai CLI + MCP server. TypeScript implementation for AI-powered Git operations with semantic search, DSR (Deterministic Semantic Record), and graph-based code analysis. Indices stored in `.git-ai/`.
@@ -11,7 +11,14 @@ git-ai CLI + MCP server. TypeScript implementation for AI-powered Git operations
 ```
 git-ai-cli-v2/
 ├── src/
-│   ├── commands/     # CLI subcommands (ai, graph, query, etc.)
+│   ├── cli/          # CLI command architecture (NEW: registry + handlers + schemas)
+│   │   ├── types.ts        # Core types, executeHandler
+│   │   ├── registry.ts     # Handler registry (24 commands)
+│   │   ├── helpers.ts      # Shared utilities
+│   │   ├── schemas/        # Zod validation schemas
+│   │   ├── handlers/       # Business logic handlers
+│   │   └── commands/       # Commander.js wrappers
+│   ├── commands/     # Command aggregator (ai.ts only)
 │   ├── core/         # Indexing, DSR, graph, storage, parsers
 │   └── mcp/          # MCP server implementation
 ├── test/             # Node test runner tests
@@ -22,7 +29,11 @@ git-ai-cli-v2/
 ## WHERE TO LOOK
 | Task | Location |
 |------|----------|
-| CLI commands | `src/commands/*.ts` |
+| CLI commands | `src/cli/commands/*.ts` (new architecture) |
+| CLI handlers | `src/cli/handlers/*.ts` (business logic) |
+| CLI schemas | `src/cli/schemas/*.ts` (Zod validation) |
+| Handler registry | `src/cli/registry.ts` (all 24 commands) |
+| Command aggregator | `src/commands/ai.ts` (entry point) |
 | Indexing logic | `src/core/indexer.ts`, `src/core/indexerIncremental.ts` |
 | DSR (commit records) | `src/core/dsr/`, `src/core/dsr.ts` |
 | Graph queries | `src/core/cozo.ts`, `src/core/astGraph.ts` |

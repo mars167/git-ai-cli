@@ -1,8 +1,10 @@
 # MCP Server 接入
 
-`git-ai` 提供了一个基于 MCP (Model Context Protocol) 的 stdio Server，供 Agent (如 Claude Desktop, Trae 等) 调用，赋予 Agent "理解代码库"的能力。
+`git-ai` 提供了一个基于 MCP (Model Context Protocol) 的 Server，供 Agent (如 Claude Desktop, Cursor, Trae 等) 调用，赋予 Agent "理解代码库"的能力。
 
 ## 启动
+
+### Stdio 模式（默认，单客户端）
 
 在任意目录执行：
 
@@ -10,7 +12,53 @@
 git-ai ai serve
 ```
 
-该进程是 stdio 模式（会等待客户端连接）。你可以把它配置到支持 MCP 的客户端里。
+该进程是 stdio 模式（会等待客户端连接）。你可以把它配置到支持 MCP 的客户端里。适用于单个 Agent 连接。
+
+### HTTP 模式（多客户端）
+
+如果你需要多个 Agent 同时连接（如同时使用 Claude Code 和 Cursor），使用 HTTP 模式：
+
+```bash
+git-ai ai serve --http --port 3000
+```
+
+HTTP 模式特性：
+- **多客户端支持**：每个连接获得独立的 session
+- **健康检查端点**：`http://localhost:3000/health` 返回服务状态
+- **MCP 端点**：`http://localhost:3000/mcp` 用于 MCP 协议通信
+- **Session 管理**：自动管理客户端 session 生命周期
+
+#### 选项说明
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `--http` | 启用 HTTP 传输（支持多客户端） | 否（使用 stdio） |
+| `--port <port>` | HTTP 服务端口 | 3000 |
+| `--stateless` | 无状态模式（不追踪 session，用于负载均衡） | 否 |
+| `--disable-mcp-log` | 禁用 MCP 访问日志 | 否 |
+
+#### HTTP 模式示例
+
+```bash
+# 默认端口 3000
+git-ai ai serve --http
+
+# 自定义端口
+git-ai ai serve --http --port 8080
+
+# 无状态模式（用于负载均衡场景）
+git-ai ai serve --http --port 3000 --stateless
+
+# 禁用访问日志
+git-ai ai serve --http --disable-mcp-log
+```
+
+#### 健康检查
+
+```bash
+curl http://localhost:3000/health
+# {"status":"ok","sessions":2}
+```
 
 ## 工具列表
 
@@ -134,8 +182,8 @@ semantic_search({ path: "/ABS/PATH/TO/REPO", query: "where is auth handled", top
 
 ### Markdown 模版（便于直接阅读/复制）
 
-- **Skill**: [`templates/agents/common/skills/git-ai-mcp/SKILL.md`](../../templates/agents/common/skills/git-ai-mcp/SKILL.md)
-- **Rule**: [`templates/agents/common/rules/git-ai-mcp/RULE.md`](../../templates/agents/common/rules/git-ai-mcp/RULE.md)
+- **Skill**: [`templates/agents/common/skills/git-ai-code-search/SKILL.md`](../../templates/agents/common/skills/git-ai-code-search/SKILL.md)
+- **Rule**: [`templates/agents/common/rules/git-ai-code-search/RULE.md`](../../templates/agents/common/rules/git-ai-code-search/RULE.md)
 
 ### 安装到 Trae
 
