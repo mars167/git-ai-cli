@@ -1,20 +1,45 @@
-import { Command } from 'commander';
 import path from 'path';
-import { resolveGitRoot } from '../core/git';
-import { checkIndex } from '../core/indexCheck';
-import { ALL_INDEX_LANGS } from '../core/lancedb';
+import { resolveGitRoot } from '../../core/git';
+import { checkIndex } from '../../core/indexCheck';
+import { ALL_INDEX_LANGS } from '../../core/lancedb';
+import { createLogger } from '../../core/log';
+import type { CLIResult, CLIError } from '../types';
+import { success, error } from '../types';
 
-export const statusCommand = new Command('status')
-  .description('Show repository index status')
-  .option('-p, --path <path>', 'Path inside the repository', '.')
-  .option('--json', 'Output machine-readable JSON', false)
-  .action(async (options) => {
-    const repoRoot = await resolveGitRoot(path.resolve(options.path));
+export async function handleCheckIndex(input: {
+  path: string;
+}): Promise<CLIResult | CLIError> {
+  const log = createLogger({ component: 'cli', cmd: 'checkIndex' });
+  const startedAt = Date.now();
+
+  try {
+    const repoRoot = await resolveGitRoot(path.resolve(input.path));
     const res = await checkIndex(repoRoot);
-    if (options.json) {
-      console.log(JSON.stringify({ repoRoot, ...res }, null, 2));
-      process.exit(res.ok ? 0 : 2);
-    }
+
+    log.info('check_index', {
+      ok: res.ok,
+      repoRoot,
+      duration_ms: Date.now() - startedAt,
+    });
+
+    return success({ repoRoot, ...res });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    log.error('checkIndex', { ok: false, err: message });
+    return error('check_index_failed', { message });
+  }
+}
+
+export async function handleStatus(input: {
+  path: string;
+  json: boolean;
+}): Promise<CLIResult | CLIError> {
+  const log = createLogger({ component: 'cli', cmd: 'status' });
+  const startedAt = Date.now();
+
+  try {
+    const repoRoot = await resolveGitRoot(path.resolve(input.path));
+    const res = await checkIndex(repoRoot);
 
     const meta = res.found.meta ?? null;
     const lines: string[] = [];
@@ -31,7 +56,6 @@ export const statusCommand = new Command('status')
       if (meta.dbDir) lines.push(`db: ${meta.dbDir}`);
       if (meta.scanRoot) lines.push(`scanRoot: ${meta.scanRoot}`);
 
-      // Display commit information
       if (meta.commit_hash) {
         const shortHash = meta.commit_hash.slice(0, 7);
         const currentHash = res.found.currentCommitHash;
@@ -61,6 +85,17 @@ export const statusCommand = new Command('status')
         lines.push(`hint: Index may be out of date. Run: git-ai ai index --incremental`);
       }
     }
-    console.log(lines.join('\n'));
-    process.exit(res.ok ? 0 : 2);
-  });
+
+    log.info('status', {
+      ok: res.ok,
+      repoRoot,
+      duration_ms: Date.now() - startedAt,
+    });
+
+    return success({ repoRoot, ...res, textOutput: lines.join('\n') });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    log.error('status', { ok: false, err: message });
+    return error('status_failed', { message });
+  }
+}

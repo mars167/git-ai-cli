@@ -18,7 +18,7 @@
 **AI Agent 技能安装 (Claude Code, Cursor, Windsurf 等)**
 
 ```bash
-npx skills add mars167/git-ai-cli/skills/git-ai-mcp
+npx skills add mars167/git-ai-cli/skills/git-ai-code-search
 ```
 
 **CLI 工具安装**
@@ -283,15 +283,63 @@ git-ai ai graph callers authenticateUser
 
 ---
 
+## 🛠️ 故障排除
+
+### Windows 安装问题
+
+git-ai 使用 [CozoDB](https://github.com/cozodb/cozo) 来实现 AST 图查询功能。在 Windows 上，如果遇到 `cozo-node` 相关的安装错误，可以尝试以下解决方案：
+
+**方案一：使用 Gitee 镜像（推荐国内用户使用）**
+
+```bash
+npm install -g @mars167/git-ai --cozo_node_prebuilt_binary_host_mirror=https://gitee.com/cozodb/cozo-lib-nodejs/releases/download/
+```
+
+**方案二：配置 npm 代理**
+
+如果你在公司防火墙或代理后面：
+
+```bash
+npm config set proxy http://your-proxy:port
+npm config set https-proxy http://your-proxy:port
+npm install -g @mars167/git-ai
+```
+
+**方案三：手动下载二进制文件**
+
+1. 从 [cozo-lib-nodejs releases](https://github.com/cozodb/cozo-lib-nodejs/releases) 下载 Windows 二进制文件
+2. 找到 `6-win32-x64.tar.gz`（64 位 Windows）
+3. 解压到 `node_modules/cozo-node/native/6/` 目录
+
+**验证安装：**
+
+```bash
+git-ai ai status --path .
+```
+
+如果看到 graph 相关功能正常工作，说明安装成功。
+
+### 其他原生依赖
+
+git-ai 还使用了以下原生包，可能需要类似的故障排除：
+- `onnxruntime-node` - 用于语义向量生成
+- `tree-sitter` - 用于代码解析
+- `@lancedb/lancedb` - 用于向量数据库
+
+大多数问题可以通过确保稳定的网络连接或使用镜像来解决。
+
+---
+
 ## 🤖 AI Agent 集成
 
 git-ai 提供标准的 MCP Server，可与以下 AI Agent 无缝集成：
 
 - **Claude Desktop**：最流行的本地 AI 编程助手
+- **Cursor**：AI 驱动的代码编辑器
 - **Trae**：强大的 AI 驱动 IDE
 - **Continue.dev**：VS Code AI 插件
 
-### Claude Desktop 配置示例
+### 单客户端模式（stdio，默认）
 
 在 `~/.claude/claude_desktop_config.json` 中添加：
 
@@ -306,6 +354,23 @@ git-ai 提供标准的 MCP Server，可与以下 AI Agent 无缝集成：
 }
 ```
 
+### 多客户端模式（HTTP）
+
+当你需要多个 AI Agent 同时连接时（如同时使用 Claude Code 和 Cursor）：
+
+```bash
+# 启动 HTTP 服务（支持多客户端）
+git-ai ai serve --http --port 3000
+```
+
+然后配置每个 Agent 连接到 `http://localhost:3000/mcp`。
+
+**HTTP 模式特性：**
+- 支持多个并发会话
+- 健康检查端点：`http://localhost:3000/health`
+- 自动管理会话生命周期
+- 可选无状态模式，用于负载均衡场景：`--stateless`
+
 然后重启 Claude Desktop，即可开始对话：
 
 > "帮我分析这个项目的架构，找出所有与支付相关的代码"
@@ -316,8 +381,8 @@ Claude 会自动调用 git-ai 的工具，为你提供深入的分析。
 
 我们提供了精心设计的 Agent 模版，帮助 AI 更好地使用 git-ai：
 
-- [Skill 模版](./templates/agents/common/skills/git-ai-mcp/SKILL.md)：指导 Agent 如何使用工具
-- [Rule 模版](./templates/agents/common/rules/git-ai-mcp/RULE.md)：约束 Agent 的行为
+- [Skill 模版](./templates/agents/common/skills/git-ai-code-search/SKILL.md)：指导 Agent 如何使用工具
+- [Rule 模版](./templates/agents/common/rules/git-ai-code-search/RULE.md)：约束 Agent 的行为
 
 Skills/Rules 文档（Markdown/YAML）会被纳入语义索引，便于通过 `semantic_search` 检索 MCP 指南。
 

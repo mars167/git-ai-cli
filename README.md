@@ -9,7 +9,7 @@
 [![license](https://img.shields.io/github/license/mars167/git-ai-cli)](./LICENSE)
 [![npm version](https://img.shields.io/npm/v/@mars167/git-ai)](https://www.npmjs.com/package/@mars167/git-ai)
 [![npm downloads](https://img.shields.io/npm/dm/@mars167/git-ai)](https://www.npmjs.com/package/@mars167/git-ai)
-[![Agent Skill](https://img.shields.io/badge/Agent_Skill-git--ai--mcp-blue)](https://skills.sh)
+[![Agent Skill](https://img.shields.io/badge/Agent_Skill-git--ai--code--search-blue)](https://skills.sh)
 
 [🇨🇳 简体中文](./README.zh-CN.md) | **English**
 
@@ -22,7 +22,7 @@
 **For AI Agents (Claude Code, Cursor, Windsurf, etc.)**
 
 ```bash
-npx skills add mars167/git-ai-cli/skills/git-ai-mcp
+npx skills add mars167/git-ai-cli/skills/git-ai-code-search
 ```
 
 **For CLI Usage**
@@ -286,15 +286,63 @@ That's it! 3 steps to get started, immediately begin deep understanding of your 
 
 ---
 
+## 🛠️ Troubleshooting
+
+### Windows Installation Issues
+
+git-ai uses [CozoDB](https://github.com/cozodb/cozo) for AST graph queries. On Windows, if you encounter installation errors related to `cozo-node`, try these solutions:
+
+**Option 1: Use Gitee Mirror (Recommended for users in China)**
+
+```bash
+npm install -g @mars167/git-ai --cozo_node_prebuilt_binary_host_mirror=https://gitee.com/cozodb/cozo-lib-nodejs/releases/download/
+```
+
+**Option 2: Configure npm proxy**
+
+If you're behind a corporate firewall or proxy:
+
+```bash
+npm config set proxy http://your-proxy:port
+npm config set https-proxy http://your-proxy:port
+npm install -g @mars167/git-ai
+```
+
+**Option 3: Manual binary download**
+
+1. Download the Windows binary from [cozo-lib-nodejs releases](https://github.com/cozodb/cozo-lib-nodejs/releases)
+2. Look for `6-win32-x64.tar.gz` (for 64-bit Windows)
+3. Extract to `node_modules/cozo-node/native/6/`
+
+**Verify installation:**
+
+```bash
+git-ai ai status --path .
+```
+
+If you see graph-related features working, installation was successful.
+
+### Other Native Dependencies
+
+git-ai also uses these native packages that may require similar troubleshooting:
+- `onnxruntime-node` - For semantic embeddings
+- `tree-sitter` - For code parsing
+- `@lancedb/lancedb` - For vector database
+
+Most issues are resolved by ensuring a stable network connection or using a mirror.
+
+---
+
 ## 🤖 AI Agent Integration
 
 git-ai provides a standard MCP Server that seamlessly integrates with:
 
 - **Claude Desktop**: The most popular local AI programming assistant
+- **Cursor**: AI-powered code editor
 - **Trae**: Powerful AI-driven IDE
 - **Continue.dev**: VS Code AI plugin
 
-### Claude Desktop Configuration Example
+### Single Agent (stdio mode - default)
 
 Add to `~/.claude/claude_desktop_config.json`:
 
@@ -309,6 +357,23 @@ Add to `~/.claude/claude_desktop_config.json`:
 }
 ```
 
+### Multiple Agents (HTTP mode)
+
+When you need multiple AI agents to connect simultaneously (e.g., Claude Code + Cursor):
+
+```bash
+# Start HTTP server (supports multiple clients)
+git-ai ai serve --http --port 3000
+```
+
+Then configure each agent to connect to `http://localhost:3000/mcp`.
+
+**HTTP mode features:**
+- Multiple concurrent sessions
+- Health check endpoint: `http://localhost:3000/health`
+- Session management with automatic cleanup
+- Optional stateless mode for load-balanced setups: `--stateless`
+
 Then restart Claude Desktop and start conversing:
 
 > "Help me analyze this project's architecture, find all payment-related code"
@@ -319,8 +384,8 @@ Claude will automatically invoke git-ai tools to provide deep analysis.
 
 We provide carefully designed Agent templates to help AI use git-ai better:
 
-- [Skill Template](./templates/agents/common/skills/git-ai-mcp/SKILL.md): Guides Agents on how to use tools
-- [Rule Template](./templates/agents/common/rules/git-ai-mcp/RULE.md): Constrains Agent behavior
+- [Skill Template](./templates/agents/common/skills/git-ai-code-search/SKILL.md): Guides Agents on how to use tools
+- [Rule Template](./templates/agents/common/rules/git-ai-code-search/RULE.md): Constrains Agent behavior
 
 Skills/Rules docs (Markdown/YAML) are indexed as part of semantic search, so agents can retrieve MCP guidance via `semantic_search`.
 

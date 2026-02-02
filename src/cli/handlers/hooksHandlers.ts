@@ -1,8 +1,10 @@
-import { Command } from 'commander';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import fs from 'fs-extra';
-import { resolveGitRoot } from '../core/git';
+import { resolveGitRoot } from '../../core/git';
+import { createLogger } from '../../core/log';
+import type { CLIResult, CLIError } from '../types';
+import { success, error } from '../types';
 
 function runGit(cwd: string, args: string[]) {
   const res = spawnSync('git', args, { cwd, stdio: 'inherit' });
@@ -69,54 +71,100 @@ async function installHookTemplates(repoRoot: string): Promise<{ installed: stri
   return { installed };
 }
 
-const install = new Command('install')
-  .description('Install git hooks (write .githooks/* and set core.hooksPath=.githooks)')
-  .option('-p, --path <path>', 'Path inside the repository', '.')
-  .action(async (options) => {
-    const repoRoot = await resolveGitRoot(path.resolve(options.path));
+export async function handleInstallHooks(input: {
+  path: string;
+}): Promise<CLIResult | CLIError> {
+  const log = createLogger({ component: 'cli', cmd: 'hooks:install' });
+  const startedAt = Date.now();
+
+  try {
+    const repoRoot = await resolveGitRoot(path.resolve(input.path));
     if (!isGitRepo(repoRoot)) {
-      console.log(JSON.stringify({ ok: false, error: 'not_a_git_repo', repoRoot }, null, 2));
-      process.exitCode = 1;
-      return;
+      log.error('hooks:install', { ok: false, error: 'not_a_git_repo', repoRoot });
+      return error('not_a_git_repo', { repoRoot, message: 'Not a git repository' });
     }
     const templates = await installHookTemplates(repoRoot);
     const exec = await ensureHooksExecutable(repoRoot);
     runGit(repoRoot, ['config', 'core.hooksPath', '.githooks']);
     const hooksPath = getGitConfig(repoRoot, 'core.hooksPath');
-    console.log(JSON.stringify({ ok: true, repoRoot, hooksPath, templates, executable: exec }, null, 2));
-  });
 
-const uninstall = new Command('uninstall')
-  .description('Uninstall git hooks (unset core.hooksPath)')
-  .option('-p, --path <path>', 'Path inside the repository', '.')
-  .action(async (options) => {
-    const repoRoot = await resolveGitRoot(path.resolve(options.path));
+    log.info('hooks_install', {
+      ok: true,
+      repoRoot,
+      hooksPath,
+      templates,
+      duration_ms: Date.now() - startedAt,
+    });
+
+    return success({ ok: true, repoRoot, hooksPath, templates, executable: exec });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    log.error('hooks:install', { ok: false, err: message });
+    return error('hooks_install_failed', { message });
+  }
+}
+
+export async function handleUninstallHooks(input: {
+  path: string;
+}): Promise<CLIResult | CLIError> {
+  const log = createLogger({ component: 'cli', cmd: 'hooks:uninstall' });
+  const startedAt = Date.now();
+
+  try {
+    const repoRoot = await resolveGitRoot(path.resolve(input.path));
     if (!isGitRepo(repoRoot)) {
-      console.log(JSON.stringify({ ok: false, error: 'not_a_git_repo', repoRoot }, null, 2));
-      process.exitCode = 1;
-      return;
+      log.error('hooks:uninstall', { ok: false, error: 'not_a_git_repo', repoRoot });
+      return error('not_a_git_repo', { repoRoot, message: 'Not a git repository' });
     }
     spawnSync('git', ['config', '--unset', 'core.hooksPath'], { cwd: repoRoot, stdio: 'ignore' });
     const hooksPath = getGitConfig(repoRoot, 'core.hooksPath');
-    console.log(JSON.stringify({ ok: true, repoRoot, hooksPath }, null, 2));
-  });
 
-const status = new Command('status')
-  .description('Show current hooks configuration')
-  .option('-p, --path <path>', 'Path inside the repository', '.')
-  .action(async (options) => {
-    const repoRoot = await resolveGitRoot(path.resolve(options.path));
+    log.info('hooks_uninstall', {
+      ok: true,
+      repoRoot,
+      hooksPath,
+      duration_ms: Date.now() - startedAt,
+    });
+
+    return success({ ok: true, repoRoot, hooksPath });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    log.error('hooks:uninstall', { ok: false, err: message });
+    return error('hooks_uninstall_failed', { message });
+  }
+}
+
+export async function handleHooksStatus(input: {
+  path: string;
+}): Promise<CLIResult | CLIError> {
+  const log = createLogger({ component: 'cli', cmd: 'hooks:status' });
+  const startedAt = Date.now();
+
+  try {
+    const repoRoot = await resolveGitRoot(path.resolve(input.path));
     if (!isGitRepo(repoRoot)) {
-      console.log(JSON.stringify({ ok: false, error: 'not_a_git_repo', repoRoot }, null, 2));
-      process.exitCode = 1;
-      return;
+      log.error('hooks:status', { ok: false, error: 'not_a_git_repo', repoRoot });
+      return error('not_a_git_repo', { repoRoot, message: 'Not a git repository' });
     }
     const hooksPath = getGitConfig(repoRoot, 'core.hooksPath');
-    console.log(JSON.stringify({ ok: true, repoRoot, hooksPath, expected: '.githooks', installed: hooksPath === '.githooks' }, null, 2));
-  });
 
-export const hooksCommand = new Command('hooks')
-  .description('Manage git hooks integration')
-  .addCommand(install)
-  .addCommand(uninstall)
-  .addCommand(status);
+    log.info('hooks_status', {
+      ok: true,
+      repoRoot,
+      hooksPath,
+      duration_ms: Date.now() - startedAt,
+    });
+
+    return success({
+      ok: true,
+      repoRoot,
+      hooksPath,
+      expected: '.githooks',
+      installed: hooksPath === '.githooks',
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    log.error('hooks:status', { ok: false, err: message });
+    return error('hooks_status_failed', { message });
+  }
+}
