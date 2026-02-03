@@ -147,8 +147,8 @@ export class GitAIV2MCPServer {
       log.info('server_started', { startDir: this.startDir, transport: 'stdio' });
     }
     
-    // Keep process alive indefinitely - server runs until killed
-    return new Promise<never>(() => {}) as never;
+    // Keep process alive indefinitely - server runs until killed by signal
+    return new Promise<never>(() => {});
   }
 
   private async startHttp() {
