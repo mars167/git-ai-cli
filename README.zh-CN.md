@@ -369,6 +369,9 @@ git-ai ai serve --http --port 3000
 - 支持多个并发会话
 - 健康检查端点：`http://localhost:3000/health`
 - 自动管理会话生命周期
+- 通过 `mcp-session-id` 响应头实现 Session 持久化
+- 完善的错误处理机制，返回正确的 HTTP 状态码
+- 支持 SIGTERM/SIGINT 信号，实现优雅关闭
 - 可选无状态模式，用于负载均衡场景：`--stateless`
 
 然后重启 Claude Desktop，即可开始对话：

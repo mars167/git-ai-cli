@@ -135,7 +135,7 @@ export class GitAIV2MCPServer {
     });
   }
 
-  async start() {
+  async start(): Promise<never> {
     const log = createLogger({ component: 'mcp' });
     const transport = this.options.transport ?? 'stdio';
 
@@ -146,6 +146,9 @@ export class GitAIV2MCPServer {
       await this.server.connect(stdioTransport);
       log.info('server_started', { startDir: this.startDir, transport: 'stdio' });
     }
+    
+    // Keep process alive indefinitely - server runs until killed
+    return new Promise<never>(() => {}) as never;
   }
 
   private async startHttp() {
@@ -270,6 +273,9 @@ export class GitAIV2MCPServer {
     });
 
     await serverStartPromise;
+
+    // Keep process alive for HTTP server
+    // The server will run until a SIGTERM/SIGINT signal is received
 
     // Handle graceful shutdown
     const shutdown = async () => {
