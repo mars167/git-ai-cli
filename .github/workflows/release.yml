@@ -113,12 +113,19 @@ jobs:
         id: publish_github
         run: |
           npm pkg set name="@${{ github.repository_owner }}/git-ai"
-          npm publish --access public 2>&1 | tee publish_output.txt
+          npm publish --access public 2>&1 | tee publish_output.txt || true
           if grep -q "You cannot publish over the previously published versions" publish_output.txt; then
             echo "::notice::Version already exists on GitHub Packages, skipping"
             echo "skipped=true" >> "$GITHUB_OUTPUT"
-          elif [ ${PIPESTATUS[0]} -ne 0 ]; then
+          elif grep -q "^\+ @${{ github.repository_owner }}/git-ai@" publish_output.txt; then
+            echo "::notice::Successfully published to GitHub Packages"
+            echo "skipped=false" >> "$GITHUB_OUTPUT"
+          elif grep -q "npm error 40[13]" publish_output.txt; then
+            echo "::warning::GitHub Packages publish failed with auth error, continuing to npmjs.org"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+          else
             echo "::error::Failed to publish to GitHub Packages"
+            cat publish_output.txt
             exit 1
           fi
         env:
@@ -144,11 +151,16 @@ jobs:
           if grep -q "You cannot publish over the previously published versions" publish_output.txt; then
             echo "::notice::Version already exists on npmjs.org, skipping"
             echo "skipped=true" >> "$GITHUB_OUTPUT"
+          elif grep -q "^\+ @mars167/git-ai@" publish_output.txt; then
+            echo "::notice::Successfully published to npmjs.org"
+            echo "skipped=false" >> "$GITHUB_OUTPUT"
           elif grep -q "npm error" publish_output.txt; then
             echo "::error::Failed to publish to npmjs.org"
             cat publish_output.txt
             exit 1
           else
+            echo "::warning::Unexpected npm publish output, check logs"
+            cat publish_output.txt
             echo "skipped=false" >> "$GITHUB_OUTPUT"
           fi
         env:
