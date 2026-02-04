@@ -73,15 +73,76 @@ async function buildRepoMapAttachment(
 
 export const handleRepoMap: ToolHandler<RepoMapArgs> = async (args) => {
   const repoRoot = await resolveGitRoot(path.resolve(args.path));
+  
+  const status = await checkIndex(repoRoot);
+  
+  if (!status.ok) {
+    return successResponse({
+      repoRoot,
+      repo_map: { 
+        enabled: false, 
+        skippedReason: 'index_unavailable',
+        diagnostics: {
+          ok: status.ok,
+          problems: status.problems,
+          warnings: status.warnings,
+          hint: status.hint || 'Rebuild index with: git-ai ai index --overwrite'
+        }
+      }
+    });
+  }
+  
+  const astGraphPath = path.join(repoRoot, '.git-ai', 'ast-graph.sqlite');
+  if (!fs.existsSync(astGraphPath)) {
+    return successResponse({
+      repoRoot,
+      repo_map: { 
+        enabled: false, 
+        skippedReason: 'missing_ast_graph',
+        hint: 'Index exists but AST graph is missing. Rebuild with: git-ai ai index --overwrite'
+      }
+    });
+  }
+  
   const wikiDir = resolveWikiDirInsideRepo(repoRoot, args.wiki_dir ?? '');
   const maxFiles = args.max_files ?? 20;
   const maxSymbolsPerFile = args.max_symbols ?? 5;
-  const repoMap = await buildRepoMapAttachment(repoRoot, wikiDir, maxFiles, maxSymbolsPerFile);
-
-  return successResponse({
-    repoRoot,
-    repo_map: repoMap
-  });
+  
+  try {
+    const files = await generateRepoMap({
+      repoRoot,
+      maxFiles,
+      maxSymbolsPerFile,
+      wikiDir: wikiDir || undefined
+    });
+    
+    if (files.length === 0) {
+      return successResponse({
+        repoRoot,
+        repo_map: { 
+          enabled: false, 
+          skippedReason: 'no_symbols_found',
+          hint: 'AST graph exists but no symbols found. This may indicate: (1) Empty repository, (2) Unsupported file types, or (3) Parsing errors. Check .git-ai/cozo.error.json for details.'
+        }
+      });
+    }
+    
+    return successResponse({
+      repoRoot,
+      repo_map: { enabled: true, wikiDir, files }
+    });
+    
+  } catch (e: any) {
+    return successResponse({
+      repoRoot,
+      repo_map: { 
+        enabled: false, 
+        skippedReason: 'generation_error',
+        error: String(e?.message ?? e),
+        hint: 'Check .git-ai/cozo.error.json for details'
+      }
+    });
+  }
 };
 
 export const handleSearchSymbols: ToolHandler<SearchSymbolsArgs> = async (args) => {

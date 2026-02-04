@@ -27,6 +27,9 @@ HTTP 模式特性：
 - **健康检查端点**：`http://localhost:3000/health` 返回服务状态
 - **MCP 端点**：`http://localhost:3000/mcp` 用于 MCP 协议通信
 - **Session 管理**：自动管理客户端 session 生命周期
+- **Session 持久化**：Session ID 通过 `mcp-session-id` 响应头返回，客户端可复用
+- **错误处理**：完善的错误处理机制，返回正确的 HTTP 状态码
+- **优雅关闭**：支持 SIGTERM/SIGINT 信号，实现优雅关闭
 
 #### 选项说明
 
@@ -58,6 +61,30 @@ git-ai ai serve --http --disable-mcp-log
 ```bash
 curl http://localhost:3000/health
 # {"status":"ok","sessions":2}
+```
+
+#### Session 管理
+
+连接到 MCP 端点时，服务器会：
+1. 如果请求未提供 `mcp-session-id` 请求头，则创建新 session
+2. 通过 `mcp-session-id` 响应头返回 session ID
+3. 客户端应在后续请求中包含此头部以复用 session
+4. Session 在连接关闭时自动清理
+
+Session 使用示例：
+```bash
+# 第一次请求 - 创建新 session
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -i  # -i 显示响应头，包括 mcp-session-id
+
+# 后续请求 - 复用 session
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "mcp-session-id: <第一次响应中的session-id>" \
+  ...
 ```
 
 ## 工具列表

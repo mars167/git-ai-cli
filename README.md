@@ -372,6 +372,9 @@ Then configure each agent to connect to `http://localhost:3000/mcp`.
 - Multiple concurrent sessions
 - Health check endpoint: `http://localhost:3000/health`
 - Session management with automatic cleanup
+- Session persistence via `mcp-session-id` response header
+- Comprehensive error handling with proper HTTP status codes
+- Graceful shutdown with SIGTERM/SIGINT signal handlers
 - Optional stateless mode for load-balanced setups: `--stateless`
 
 Then restart Claude Desktop and start conversing:
