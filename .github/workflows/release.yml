@@ -117,6 +117,9 @@ jobs:
           if grep -q "You cannot publish over the previously published versions" publish_output.txt; then
             echo "::notice::Version already exists on GitHub Packages, skipping"
             echo "skipped=true" >> "$GITHUB_OUTPUT"
+          elif grep -q "Cannot publish over existing version" publish_output.txt; then
+            echo "::notice::Version already exists on GitHub Packages (E409), skipping"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
           elif grep -q "^\+ @${{ github.repository_owner }}/git-ai@" publish_output.txt; then
             echo "::notice::Successfully published to GitHub Packages"
             echo "skipped=false" >> "$GITHUB_OUTPUT"
@@ -142,6 +145,7 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
+          scope: "@mars167"
 
       - name: Publish to npmjs.org
         if: ${{ env.RELEASE_TAG != '' }}
