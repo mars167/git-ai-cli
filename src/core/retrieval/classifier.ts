@@ -1,7 +1,7 @@
 import type { ExtractedEntity, QueryPrimaryType, QueryType } from './types';
 
 const STRUCTURAL_HINTS = ['callers', 'callees', 'call chain', 'inherit', 'extends', 'implements', 'graph', 'references', 'refs', 'ast'];
-const HISTORICAL_HINTS = ['history', 'commit', 'diff', 'changed', 'evolution', 'dsr', 'timeline', 'version', 'previous'];
+const HISTORICAL_HINTS = ['history', 'commit', 'diff', 'changed', 'evolution', 'timeline', 'version', 'previous'];
 const SYMBOL_HINTS = ['function', 'class', 'method', 'symbol', 'identifier'];
 
 const FILE_PATTERN = /(\S+\.(?:ts|tsx|js|jsx|java|py|go|rs|c|h|md|mdx|yaml|yml))/i;

@@ -7,6 +7,8 @@ export interface RepoMapOptions {
   maxFiles?: number;
   maxSymbolsPerFile?: number;
   wikiDir?: string;
+  depth?: number;
+  maxNodes?: number;
 }
 
 export interface SymbolRank {
@@ -28,14 +30,25 @@ export interface FileRank {
 }
 
 export async function generateRepoMap(options: RepoMapOptions): Promise<FileRank[]> {
-  const { repoRoot, maxFiles = 20, maxSymbolsPerFile = 5, wikiDir } = options;
+  const { 
+    repoRoot, 
+    maxFiles = 20, 
+    maxSymbolsPerFile = 5, 
+    wikiDir,
+    depth = 5,
+    maxNodes = 5000 
+  } = options;
 
   const symbolsQuery = `?[ref_id, file, name, kind, signature, start_line, end_line] := *ast_symbol{ref_id, file, name, kind, signature, start_line, end_line}`;
   const symbolsRes = await runAstGraphQuery(repoRoot, symbolsQuery);
   const symbolsRaw = Array.isArray(symbolsRes?.rows) ? symbolsRes.rows : [];
   
+  if (symbolsRaw.length === 0) {
+    return [];
+  }
+
   const symbolMap = new Map<string, any>();
-  for (const row of symbolsRaw) {
+  for (const row of symbolsRaw.slice(0, maxNodes)) {
     symbolMap.set(row[0], {
       id: row[0],
       file: row[1],
@@ -75,7 +88,7 @@ export async function generateRepoMap(options: RepoMapOptions): Promise<FileRank
   nodes.forEach(n => ranks.set(n.id, 1 / N));
 
   const damping = 0.85;
-  const iterations = 10;
+  const iterations = Math.max(1, Math.min(depth ?? 5, 20));
 
   for (let i = 0; i < iterations; i++) {
     const newRanks = new Map<string, number>();

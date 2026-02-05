@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { SnapshotCodeParser } from '../dsr/snapshotParser';
+import { SnapshotCodeParser } from '../parser/snapshotParser';
 import { AstReference, ChunkRow, RefRow, SymbolInfo } from '../types';
 import { IndexLang } from '../lancedb';
 import { hashEmbedding } from '../embedding';

@@ -9,7 +9,7 @@ import { toPosixPath } from './paths';
 import { removeFileFromAstGraph, writeAstGraphToCozo } from './astGraph';
 import { ChunkRow, RefRow } from './types';
 import { GitDiffPathChange } from './gitDiff';
-import { SnapshotCodeParser } from './dsr/snapshotParser';
+import { SnapshotCodeParser } from './parser/snapshotParser';
 import { getCurrentCommitHash } from './git';
 
 export interface IncrementalIndexOptions {

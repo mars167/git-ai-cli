@@ -7,14 +7,14 @@ import { packCommand, unpackCommand } from '../cli/commands/archiveCommands.js';
 import { hooksCommand } from '../cli/commands/hooksCommands.js';
 import { graphCommand } from '../cli/commands/graphCommands.js';
 import { checkIndexCommand, statusCommand } from '../cli/commands/statusCommands.js';
-import { dsrCommand } from '../cli/commands/dsrCommands.js';
+import { repoMapCommand } from '../cli/commands/repoMapCommand.js';
 
 export const aiCommand = new Command('ai')
   .description('AI features (indexing, search, hooks, MCP)')
   .addCommand(indexCommand)
   .addCommand(checkIndexCommand)
   .addCommand(statusCommand)
-  .addCommand(dsrCommand)
+  .addCommand(repoMapCommand)
   .addCommand(queryCommand)
   .addCommand(semanticCommand)
   .addCommand(graphCommand)

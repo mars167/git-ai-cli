@@ -23,18 +23,6 @@ import { SearchSymbolsSchema } from './schemas/querySchemas';
 import { handleSemanticSearch } from './handlers/semanticHandlers';
 import { handleIndexRepo } from './handlers/indexHandlers';
 import { handleSearchSymbols } from './handlers/queryHandlers';
-import {
-  DsrContextSchema,
-  DsrGenerateSchema,
-  DsrRebuildIndexSchema,
-  DsrSymbolEvolutionSchema,
-} from './schemas/dsrSchemas';
-import {
-  handleDsrContext,
-  handleDsrGenerate,
-  handleDsrRebuildIndex,
-  handleDsrSymbolEvolution,
-} from './handlers/dsrHandlers';
 import { CheckIndexSchema, StatusSchema } from './schemas/statusSchemas';
 import { handleCheckIndex, handleStatus } from './handlers/statusHandlers';
 import { PackIndexSchema, UnpackIndexSchema } from './schemas/archiveSchemas';
@@ -43,6 +31,8 @@ import { InstallHooksSchema, UninstallHooksSchema, HooksStatusSchema } from './s
 import { handleInstallHooks, handleUninstallHooks, handleHooksStatus } from './handlers/hooksHandlers';
 import { ServeSchema, AgentInstallSchema } from './schemas/serveSchemas';
 import { handleServe, handleAgentInstall } from './handlers/serveHandlers';
+import { RepoMapSchema } from './schemas/repoMapSchema';
+import { handleRepoMap } from './handlers/repoMapHandler';
 
 /**
  * Registry of all CLI command handlers
@@ -93,22 +83,9 @@ export const cliHandlers: Record<string, HandlerRegistration<any>> = {
     schema: AgentInstallSchema,
     handler: handleAgentInstall,
   },
-  // DSR subcommands
-  'dsr:context': {
-    schema: DsrContextSchema,
-    handler: handleDsrContext,
-  },
-  'dsr:generate': {
-    schema: DsrGenerateSchema,
-    handler: handleDsrGenerate,
-  },
-  'dsr:rebuild-index': {
-    schema: DsrRebuildIndexSchema,
-    handler: handleDsrRebuildIndex,
-  },
-  'dsr:symbol-evolution': {
-    schema: DsrSymbolEvolutionSchema,
-    handler: handleDsrSymbolEvolution,
+  'repo-map': {
+    schema: RepoMapSchema,
+    handler: handleRepoMap,
   },
   // Hooks subcommands
   'hooks:install': {

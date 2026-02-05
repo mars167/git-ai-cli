@@ -15,11 +15,10 @@ export interface QueryType {
 export interface RetrievalWeights {
   vectorWeight: number;
   graphWeight: number;
-  dsrWeight: number;
   symbolWeight: number;
 }
 
-export type RetrievalSource = 'vector' | 'graph' | 'dsr' | 'symbol';
+export type RetrievalSource = 'vector' | 'graph' | 'symbol';
 
 export interface RetrievalResult {
   source: RetrievalSource;

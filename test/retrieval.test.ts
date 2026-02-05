@@ -41,8 +41,8 @@ test('expandQuery resolves abbreviations and synonyms', () => {
 test('computeWeights emphasizes historical queries', () => {
   const queryType: QueryType = { primary: 'historical', confidence: 0.8, entities: [] };
   const weights = computeWeights(queryType);
-  assert.ok(weights.dsrWeight > weights.graphWeight);
-  const sum = weights.vectorWeight + weights.graphWeight + weights.dsrWeight + weights.symbolWeight;
+  assert.ok(weights.vectorWeight >= weights.graphWeight);
+  const sum = weights.vectorWeight + weights.graphWeight + weights.symbolWeight;
   assert.ok(Math.abs(sum - 1) < 1e-6);
 });
 
@@ -50,9 +50,9 @@ test('fuseResults ranks by weighted source', () => {
   const candidates: RetrievalResult[] = [
     { source: 'vector', id: 'v1', score: 0.9, text: 'vector result' },
     { source: 'graph', id: 'g1', score: 0.4, text: 'graph result' },
-    { source: 'dsr', id: 'd1', score: 0.7, text: 'dsr result' },
+    { source: 'symbol', id: 's1', score: 0.7, text: 'symbol result' },
   ];
-  const weights = { vectorWeight: 0.2, graphWeight: 0.5, dsrWeight: 0.2, symbolWeight: 0.1 };
+  const weights = { vectorWeight: 0.2, graphWeight: 0.5, symbolWeight: 0.3 };
   const fused = fuseResults(candidates, weights, 3);
   assert.equal(fused[0]?.source, 'graph');
 });
