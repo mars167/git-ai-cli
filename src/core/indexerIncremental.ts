@@ -63,12 +63,16 @@ function matchesPattern(file: string, pattern: string): boolean {
   // Check cache first
   let regex = patternCache.get(pattern);
   if (!regex) {
-    // Convert glob pattern to regex
+    // Convert glob pattern to regex by escaping special regex chars first, then handling glob patterns
     const regexPattern = pattern
+      // Escape regex special characters except the ones we use for glob
+      .replace(/[\\^$+{}[\]|()]/g, '\\$&')
+      // Handle glob patterns
       .replace(/\*\*/g, '___GLOBSTAR___')
       .replace(/\*/g, '[^/]*')
       .replace(/___GLOBSTAR___/g, '.*')
       .replace(/\?/g, '[^/]')
+      // Escape dots for literal matching
       .replace(/\./g, '\\.');
     regex = new RegExp(`^${regexPattern}$`);
     patternCache.set(pattern, regex);
