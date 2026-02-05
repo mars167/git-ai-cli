@@ -9,6 +9,9 @@ import { ChunkRow, RefRow } from './types';
 import { toPosixPath } from './paths';
 import { getCurrentCommitHash } from './git';
 
+// Supported file extensions for indexing
+const INDEXABLE_EXTENSIONS = 'ts,tsx,js,jsx,java,c,h,go,py,rs,md,mdx,yml,yaml';
+
 export interface IndexOptions {
   repoRoot: string;
   scanRoot?: string;
@@ -29,6 +32,23 @@ async function loadIgnorePatterns(repoRoot: string, fileName: string): Promise<s
       if (l.length === 0) return null;
       if (l.startsWith('#')) return null;
       if (l.startsWith('!')) return null;
+      const withoutLeadingSlash = l.startsWith('/') ? l.slice(1) : l;
+      if (withoutLeadingSlash.endsWith('/')) return `${withoutLeadingSlash}**`;
+      return withoutLeadingSlash;
+    })
+    .filter((l): l is string => Boolean(l));
+}
+
+async function loadIncludePatterns(repoRoot: string): Promise<string[]> {
+  const includePath = path.join(repoRoot, '.git-ai', 'include.txt');
+  if (!await fs.pathExists(includePath)) return [];
+  const raw = await fs.readFile(includePath, 'utf-8');
+  return raw
+    .split('\n')
+    .map(l => l.trim())
+    .map((l) => {
+      if (l.length === 0) return null;
+      if (l.startsWith('#')) return null;
       const withoutLeadingSlash = l.startsWith('/') ? l.slice(1) : l;
       if (withoutLeadingSlash.endsWith('/')) return `${withoutLeadingSlash}**`;
       return withoutLeadingSlash;
@@ -71,29 +91,73 @@ export class IndexerV2 {
 
     const aiIgnore = await loadIgnorePatterns(this.repoRoot, '.aiignore');
     const gitIgnore = await loadIgnorePatterns(this.repoRoot, '.gitignore');
-    const files = await glob('**/*.{ts,tsx,js,jsx,java,c,h,go,py,rs,md,mdx,yml,yaml}', {
+    const includePatterns = await loadIncludePatterns(this.repoRoot);
+
+    // Base ignore patterns that are always applied
+    const baseIgnore = [
+      'node_modules/**',
+      '**/node_modules/**',
+      '.git/**',
+      '**/.git/**',
+      '.git-ai/**',
+      '**/.git-ai/**',
+      '.repo/**',
+      '**/.repo/**',
+      'dist/**',
+      '**/dist/**',
+      'target/**',
+      '**/target/**',
+      'build/**',
+      '**/build/**',
+      '.gradle/**',
+      '**/.gradle/**',
+    ];
+
+    // Get files with normal ignore patterns (aiIgnore and gitIgnore)
+    const filesNormal = await glob(`**/*.{${INDEXABLE_EXTENSIONS}}`, {
       cwd: this.scanRoot,
       nodir: true,
       ignore: [
-        'node_modules/**',
-        '**/node_modules/**',
-        '.git/**',
-        '**/.git/**',
-        '.git-ai/**',
-        '**/.git-ai/**',
-        '.repo/**',
-        '**/.repo/**',
-        'dist/**',
-        'target/**',
-        '**/target/**',
-        'build/**',
-        '**/build/**',
-        '.gradle/**',
-        '**/.gradle/**',
+        ...baseIgnore,
         ...aiIgnore,
         ...gitIgnore,
       ],
     });
+
+    let files = filesNormal;
+
+    // If include patterns exist, also get files matching those patterns (ignoring gitIgnore but respecting aiIgnore)
+    if (includePatterns.length > 0) {
+      // For each include pattern, get files matching it without gitIgnore restrictions
+      const includedFileSets = await Promise.all(
+        includePatterns.map(async (pattern) => {
+          // Ensure pattern covers all file extensions we support
+          let fullPattern = pattern;
+          // If pattern is a directory pattern (e.g., "generated/**"), append file extensions
+          if (pattern.endsWith('**')) {
+            fullPattern = `${pattern}/*.{${INDEXABLE_EXTENSIONS}}`;
+          } else if (!pattern.match(/\.(ts|tsx|js|jsx|java|c|h|go|py|rs|md|mdx|yml|yaml)$/)) {
+            // If pattern doesn't end with a file extension, treat it as a directory
+            fullPattern = `${pattern}/**/*.{${INDEXABLE_EXTENSIONS}}`;
+          }
+
+          return glob(fullPattern, {
+            cwd: this.scanRoot,
+            nodir: true,
+            ignore: [
+              ...baseIgnore,
+              ...aiIgnore,
+              // Note: gitIgnore is NOT applied here
+            ],
+          });
+        })
+      );
+
+      // Flatten and merge with normal files
+      const includedFiles = includedFileSets.flat();
+      const fileSet = new Set([...filesNormal, ...includedFiles]);
+      files = Array.from(fileSet);
+    }
 
     const languages = Array.from(new Set(files.map(inferIndexLang)));
     const { byLang } = await openTablesByLang({

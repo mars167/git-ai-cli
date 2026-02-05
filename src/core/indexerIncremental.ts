@@ -21,6 +21,84 @@ export interface IncrementalIndexOptions {
   onProgress?: (p: { totalFiles: number; processedFiles: number; currentFile?: string }) => void;
 }
 
+async function loadIgnorePatterns(repoRoot: string, fileName: string): Promise<string[]> {
+  const ignorePath = path.join(repoRoot, fileName);
+  if (!await fs.pathExists(ignorePath)) return [];
+  const raw = await fs.readFile(ignorePath, 'utf-8');
+  return raw
+    .split('\n')
+    .map(l => l.trim())
+    .map((l) => {
+      if (l.length === 0) return null;
+      if (l.startsWith('#')) return null;
+      if (l.startsWith('!')) return null;
+      const withoutLeadingSlash = l.startsWith('/') ? l.slice(1) : l;
+      if (withoutLeadingSlash.endsWith('/')) return `${withoutLeadingSlash}**`;
+      return withoutLeadingSlash;
+    })
+    .filter((l): l is string => Boolean(l));
+}
+
+async function loadIncludePatterns(repoRoot: string): Promise<string[]> {
+  const includePath = path.join(repoRoot, '.git-ai', 'include.txt');
+  if (!await fs.pathExists(includePath)) return [];
+  const raw = await fs.readFile(includePath, 'utf-8');
+  return raw
+    .split('\n')
+    .map(l => l.trim())
+    .map((l) => {
+      if (l.length === 0) return null;
+      if (l.startsWith('#')) return null;
+      const withoutLeadingSlash = l.startsWith('/') ? l.slice(1) : l;
+      if (withoutLeadingSlash.endsWith('/')) return `${withoutLeadingSlash}**`;
+      return withoutLeadingSlash;
+    })
+    .filter((l): l is string => Boolean(l));
+}
+
+// Cache for compiled regex patterns
+const patternCache = new Map<string, RegExp>();
+
+function matchesPattern(file: string, pattern: string): boolean {
+  // Check cache first
+  let regex = patternCache.get(pattern);
+  if (!regex) {
+    // Convert glob pattern to regex by escaping special regex chars first, then handling glob patterns
+    const regexPattern = pattern
+      // Escape regex special characters except the ones we use for glob
+      .replace(/[\\^$+{}[\]|()]/g, '\\$&')
+      // Handle glob patterns
+      .replace(/\*\*/g, '___GLOBSTAR___')
+      .replace(/\*/g, '[^/]*')
+      .replace(/___GLOBSTAR___/g, '.*')
+      .replace(/\?/g, '[^/]')
+      // Escape dots for literal matching
+      .replace(/\./g, '\\.');
+    regex = new RegExp(`^${regexPattern}$`);
+    patternCache.set(pattern, regex);
+  }
+  return regex.test(file);
+}
+
+function shouldIndexFile(file: string, aiIgnore: string[], gitIgnore: string[], includePatterns: string[]): boolean {
+  // Check if file matches aiIgnore patterns (highest priority exclusion)
+  if (aiIgnore.some(pattern => matchesPattern(file, pattern))) {
+    return false;
+  }
+
+  // Check if file matches include patterns (overrides gitIgnore)
+  if (includePatterns.some(pattern => matchesPattern(file, pattern))) {
+    return true;
+  }
+
+  // Check if file matches gitIgnore patterns
+  if (gitIgnore.some(pattern => matchesPattern(file, pattern))) {
+    return false;
+  }
+
+  return true;
+}
+
 function buildChunkText(file: string, symbol: { name: string; kind: string; signature: string }): string {
   return `file:${file}\nkind:${symbol.kind}\nname:${symbol.name}\nsignature:${symbol.signature}`;
 }
@@ -99,6 +177,11 @@ export class IncrementalIndexerV2 {
     await fs.ensureDir(gitAiDir);
     const dbDir = defaultDbDir(this.repoRoot);
 
+    // Load ignore and include patterns
+    const aiIgnore = await loadIgnorePatterns(this.repoRoot, '.aiignore');
+    const gitIgnore = await loadIgnorePatterns(this.repoRoot, '.gitignore');
+    const includePatterns = await loadIncludePatterns(this.repoRoot);
+
     const { byLang } = await openTablesByLang({
       dbDir,
       dim: this.dim,
@@ -143,6 +226,9 @@ export class IncrementalIndexerV2 {
       await removeFileFromAstGraph(this.repoRoot, filePosix);
 
       if (!isIndexableFile(filePosix)) continue;
+
+      // Check if file should be indexed based on ignore/include patterns
+      if (!shouldIndexFile(filePosix, aiIgnore, gitIgnore, includePatterns)) continue;
 
       const lang = inferIndexLang(filePosix);
       if (!chunkRowsByLang[lang]) chunkRowsByLang[lang] = [];
