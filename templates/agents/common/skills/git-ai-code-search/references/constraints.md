@@ -50,12 +50,6 @@ search_symbols({ path: "/repo", query: "..." })
 
 **Why:** Prevents breaking changes and ensures informed modifications.
 
-### 4. use_dsr_for_history
-
-**Rule:** When tracing symbol history, MUST use `dsr_symbol_evolution`. NEVER manually parse git log or diff.
-
-**Why:** DSR provides structured, semantic change information that raw git commands don't.
-
 ## Warning-Level Rules
 
 ### 5. repo_map_before_large_change
@@ -63,15 +57,6 @@ search_symbols({ path: "/repo", query: "..." })
 **Rule:** Before large refactoring or architectural changes, use `repo_map` to understand project structure.
 
 **Why:** Provides context for planning changes and identifying affected areas.
-
-### 6. respect_dsr_risk
-
-**Rule:** When DSR reports `risk_level: high`, exercise extra caution. Operations like `delete` and `rename` require additional review.
-
-**Risk levels:**
-- `low`: Safe, routine changes
-- `medium`: Review recommended
-- `high`: Extra scrutiny required
 
 ## Recommended Practices
 
@@ -103,26 +88,13 @@ ast_graph_callers({ path: "/repo", name: result.name })
 // etc.
 ```
 
-### incremental_dsr_generation
-
-Generate DSR on-demand for specific commits rather than batch-generating for entire history.
-
-```js
-// Good: Generate for specific commit when needed
-dsr_generate({ path: "/repo", commit: "abc123" })
-
-// Avoid: Generating for all historical commits upfront
-```
-
 ## Prohibited Actions
 
 | Action | Reason |
 |--------|--------|
 | Assume symbol location without searching | Always confirm via search |
 | Modify unread files | Must read and understand first |
-| Manual git log parsing for history | Use DSR tools instead |
 | Search with missing index | Rebuild index first |
-| Ignore high risk DSR warnings | Requires extra review |
 | Omit `path` parameter | Every call must be explicit |
 
 ## Tool-Specific Constraints
@@ -137,7 +109,4 @@ dsr_generate({ path: "/repo", commit: "abc123" })
 | `ast_graph_callers` | `check_index` passed | `path`, `name` |
 | `ast_graph_callees` | `check_index` passed | `path`, `name` |
 | `ast_graph_chain` | `check_index` passed | `path`, `name` |
-| `dsr_context` | None | `path` |
-| `dsr_generate` | None | `path`, `commit` |
-| `dsr_symbol_evolution` | DSR exists for commits | `path`, `symbol` |
 | `read_file` | None | `path`, `file` |

@@ -12,7 +12,6 @@ commands/
 ├── graph.ts      # Graph exploration
 ├── query.ts      # Symbol search
 ├── semantic.ts   # Semantic search
-├── dsr.ts        # DSR operations
 ├── index.ts      # Index management
 ├── status.ts     # Repo status
 ├── pack.ts       # Index packing
@@ -27,7 +26,6 @@ commands/
 | Query with AI | `ai.ts` |
 | Graph traversal | `graph.ts` |
 | Symbol lookup | `query.ts` |
-| Commit history | `dsr.ts` |
 
 ## CONVENTIONS (deviations from root)
 - All commands: `try/catch`, log `{ ok: false, err }`, exit(1)

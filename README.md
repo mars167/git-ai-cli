@@ -39,12 +39,12 @@ npm install -g @mars167/git-ai
 
 **Code semantics should be versioned and traceable, just like code itself**
 
-git-ai is a local code understanding tool that builds a traceable semantic layer for your codebase using DSR (Deterministic Semantic Record) and Hyper RAG, enabling AI Agents and developers to truly understand code evolution and relationships.
+git-ai is a local code understanding tool that builds a semantic layer for your codebase using advanced RAG techniques, enabling AI Agents and developers to deeply understand code structure and relationships.
 
 ### ✨ Why git-ai?
 
-- **🔗 Hyper RAG**: Combines vector retrieval + graph retrieval + DSR for multi-dimensional semantic understanding
-- **📜 Versioned Semantics**: Every commit has a semantic snapshot, historical changes are clear and traceable
+- **🔗 Advanced RAG**: Combines vector retrieval + graph retrieval for multi-dimensional semantic understanding
+- **📊 Fast & Accurate**: Optimized repo-map with PageRank-based importance scoring
 - **🔄 Always Available**: Indices travel with code, available immediately after checkout, no rebuild needed
 - **🤖 AI-Native**: MCP Server enables Claude, Trae and other Agents to deeply understand your codebase
 - **🔒 Fully Local**: Code never leaves your machine, secure and private
@@ -80,19 +80,7 @@ git-ai ai graph callees authenticateUser
 git-ai ai graph chain authenticateUser --max-depth 3
 ```
 
-### 3️⃣ Historical Change Tracing
-
-Track symbol evolution through DSR:
-
-```bash
-# View function's historical changes
-git-ai ai dsr query symbol-evolution authenticateUser --limit 50
-
-# View complete semantic snapshot for a commit
-git-ai ai dsr context
-```
-
-### 4️⃣ Multi-Language Support
+### 3️⃣ Multi-Language Support
 
 Supports multiple mainstream programming languages:
 
@@ -112,18 +100,14 @@ Supports multiple mainstream programming languages:
 
 ## 💡 Design Philosophy
 
-git-ai is not just a search tool, but a "semantic timeline" for your codebase:
+git-ai is built for deep code understanding through multiple retrieval strategies:
 
-### DSR (Deterministic Semantic Record)
-
-Each commit corresponds to an immutable semantic snapshot, recording the code structure, symbol relationships, and design intent at that time. Code semantics should be versioned—just like code itself—traceable, comparable, and evolvable.
-
-### Hyper RAG
+### Advanced RAG
 
 Combines multiple retrieval methods for deeper understanding:
-- **Vector Retrieval**: Semantic similarity matching
-- **Graph Retrieval**: Call relationship, inheritance analysis
-- **DSR Retrieval**: Historical evolution tracing
+- **Vector Retrieval**: Semantic similarity matching using SQ8 quantized embeddings
+- **Graph Retrieval**: Call relationship and dependency analysis via AST graphs
+- **Intelligent Fusion**: Weighted combination of retrieval strategies for optimal results
 
 ### Decentralized Semantics
 
@@ -161,10 +145,10 @@ git-ai ai graph chain processOrder --max-depth 5
 # Find all callers
 git-ai ai graph callers deprecatedFunction
 
-# Trace historical changes, understand design intent
-git-ai ai dsr query symbol-evolution deprecatedFunction --all
+# Analyze complete call chain
+git-ai ai graph chain deprecatedFunction --direction upstream
 ```
-*DSR traces historical changes, understanding design intent*
+*Graph analysis reveals complete impact scope*
 
 ### Scenario 3: Bug Localization and Root Cause Analysis
 
@@ -195,30 +179,30 @@ Claude will automatically invoke git-ai tools to provide deep analysis. *Enablin
 
 ```mermaid
 graph TB
-    A[Git Repository] -->|On Commit| B[DSR\nDeterministic Semantic Record]
-    B --> C[.git-ai/dsr/commit.json\nSemantic Snapshot]
-    C -->|Index Rebuild| D[LanceDB\nVector Database]
-    C -->|Index Rebuild| E[CozoDB\nGraph Database]
-    D --> F[MCP Server]
-    E --> F
-    F -->|Tool Call| G[AI Agent\nClaude Desktop / Trae]
-    F -->|CLI| H[Developer]
-    C -->|Cross-Version| I[Semantic Timeline\nTraceable · Comparable · Evolvable]
+    A[Git Repository] -->|Index| B[Code Parser\nMulti-Language AST]
+    B --> C[LanceDB\nVector Database]
+    B --> D[CozoDB\nGraph Database]
+    C --> E[MCP Server]
+    D --> E
+    E -->|Tool Call| F[AI Agent\nClaude Desktop / Cursor]
+    E -->|CLI| G[Developer]
+    B -->|Repo Map| H[PageRank Analysis\nImportance Scoring]
+    H --> E
     style B fill:#e1f5ff,stroke:#333
-    style C fill:#e8f5e9,stroke:#333
+    style C fill:#fff4e1,stroke:#333
     style D fill:#fff4e1,stroke:#333
-    style E fill:#fff4e1,stroke:#333
-    style F fill:#e8f5e9,stroke:#333
-    style G fill:#f3e5f5,stroke:#333
-    style I fill:#fce4ec,stroke:#333
+    style E fill:#e8f5e9,stroke:#333
+    style F fill:#f3e5f5,stroke:#333
+    style H fill:#fce4ec,stroke:#333
 ```
 
 **Core Components**:
 
-- **DSR (Deterministic Semantic Record)**: Immutable semantic snapshots stored per commit, versioned semantics
-- **LanceDB + SQ8**: High-performance vector database, supporting semantic search
-- **CozoDB**: Graph database, supporting AST-level relationship queries
-- **MCP Server**: Standard protocol interface, for AI Agent invocation
+- **Code Parser**: Multi-language AST extraction (TypeScript, Java, Python, Go, Rust, C, Markdown, YAML)
+- **LanceDB + SQ8**: High-performance vector database with quantized embeddings for semantic search
+- **CozoDB**: Graph database for AST-level relationship queries (callers, callees, chains)
+- **Repo Map**: PageRank-based code importance analysis for project overview
+- **MCP Server**: Standard protocol interface for AI Agent invocation
 
 ---
 
@@ -228,12 +212,12 @@ graph TB
 |---------|--------|-------------------|-------------|
 | Local Execution | ✅ | ❌ | ❌ |
 | AST-Level Analysis | ✅ | ❌ | ✅ |
-| Versioned Semantics | ✅ | ❌ | ❌ |
-| Historical Change Tracing | ✅ | ❌ | ❌ |
 | AI Agent Integration | ✅ | ❌ | ❌ |
 | Free & Open Source | ✅ | ❌ | ❌ |
 | Semantic Search | ✅ | ✅ | ✅ |
 | Call Chain Analysis | ✅ | ❌ | ✅ |
+| Multi-Language Support | ✅ | ✅ | ✅ |
+| Repo Map with PageRank | ✅ | ❌ | ❌ |
 
 ---
 

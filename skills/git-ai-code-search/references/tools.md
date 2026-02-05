@@ -178,61 +178,6 @@ ast_graph_refs({
 })
 ```
 
-## DSR Tools (Deterministic Semantic Records)
-
-### dsr_context
-
-Get repository Git context and DSR directory state.
-
-```js
-dsr_context({ path: "/repo" })
-```
-
-**Returns:** Branch info, commit status, DSR availability.
-
-### dsr_generate
-
-Generate DSR for a specific commit.
-
-```js
-dsr_generate({
-  path: "/repo",
-  commit: "HEAD"  // or specific commit hash
-})
-```
-
-**When to use:** Before querying history for commits without DSR.
-
-### dsr_symbol_evolution
-
-Track how a symbol changed over time.
-
-```js
-dsr_symbol_evolution({
-  path: "/repo",
-  symbol: "authenticateUser",
-  limit: 50,
-  contains: false,  // true for substring match
-  all: false        // true to traverse all refs, not just HEAD
-})
-```
-
-**Returns:** List of changes with:
-- `commit`: Commit hash
-- `operation`: add | modify | delete | rename
-- `risk_level`: low | medium | high
-- `details`: Change description
-
-**When to use:** Understanding design evolution, finding when/why something changed.
-
-### dsr_rebuild_index
-
-Rebuild DSR index from DSR files.
-
-```js
-dsr_rebuild_index({ path: "/repo" })
-```
-
 ## File Operations
 
 ### read_file
