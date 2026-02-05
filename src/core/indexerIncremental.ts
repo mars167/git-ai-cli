@@ -56,15 +56,23 @@ async function loadIncludePatterns(repoRoot: string): Promise<string[]> {
     .filter((l): l is string => Boolean(l));
 }
 
+// Cache for compiled regex patterns
+const patternCache = new Map<string, RegExp>();
+
 function matchesPattern(file: string, pattern: string): boolean {
-  // Convert glob pattern to regex
-  const regexPattern = pattern
-    .replace(/\*\*/g, '___GLOBSTAR___')
-    .replace(/\*/g, '[^/]*')
-    .replace(/___GLOBSTAR___/g, '.*')
-    .replace(/\?/g, '[^/]')
-    .replace(/\./g, '\\.');
-  const regex = new RegExp(`^${regexPattern}$`);
+  // Check cache first
+  let regex = patternCache.get(pattern);
+  if (!regex) {
+    // Convert glob pattern to regex
+    const regexPattern = pattern
+      .replace(/\*\*/g, '___GLOBSTAR___')
+      .replace(/\*/g, '[^/]*')
+      .replace(/___GLOBSTAR___/g, '.*')
+      .replace(/\?/g, '[^/]')
+      .replace(/\./g, '\\.');
+    regex = new RegExp(`^${regexPattern}$`);
+    patternCache.set(pattern, regex);
+  }
   return regex.test(file);
 }
 

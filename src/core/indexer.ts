@@ -9,6 +9,9 @@ import { ChunkRow, RefRow } from './types';
 import { toPosixPath } from './paths';
 import { getCurrentCommitHash } from './git';
 
+// Supported file extensions for indexing
+const INDEXABLE_EXTENSIONS = 'ts,tsx,js,jsx,java,c,h,go,py,rs,md,mdx,yml,yaml';
+
 export interface IndexOptions {
   repoRoot: string;
   scanRoot?: string;
@@ -101,6 +104,7 @@ export class IndexerV2 {
       '.repo/**',
       '**/.repo/**',
       'dist/**',
+      '**/dist/**',
       'target/**',
       '**/target/**',
       'build/**',
@@ -110,7 +114,7 @@ export class IndexerV2 {
     ];
 
     // Get files with normal ignore patterns (aiIgnore and gitIgnore)
-    const filesNormal = await glob('**/*.{ts,tsx,js,jsx,java,c,h,go,py,rs,md,mdx,yml,yaml}', {
+    const filesNormal = await glob(`**/*.{${INDEXABLE_EXTENSIONS}}`, {
       cwd: this.scanRoot,
       nodir: true,
       ignore: [
@@ -131,10 +135,10 @@ export class IndexerV2 {
           let fullPattern = pattern;
           // If pattern is a directory pattern (e.g., "generated/**"), append file extensions
           if (pattern.endsWith('**')) {
-            fullPattern = `${pattern}/*.{ts,tsx,js,jsx,java,c,h,go,py,rs,md,mdx,yml,yaml}`;
+            fullPattern = `${pattern}/*.{${INDEXABLE_EXTENSIONS}}`;
           } else if (!pattern.match(/\.(ts|tsx|js|jsx|java|c|h|go|py|rs|md|mdx|yml|yaml)$/)) {
             // If pattern doesn't end with a file extension, treat it as a directory
-            fullPattern = `${pattern}/**/*.{ts,tsx,js,jsx,java,c,h,go,py,rs,md,mdx,yml,yaml}`;
+            fullPattern = `${pattern}/**/*.{${INDEXABLE_EXTENSIONS}}`;
           }
 
           return glob(fullPattern, {
