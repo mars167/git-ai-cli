@@ -40,7 +40,7 @@ export async function generateRepoMap(options: RepoMapOptions): Promise<FileRank
   } = options;
 
   const symbolsQuery = `?[ref_id, file, name, kind, signature, start_line, end_line] := *ast_symbol{ref_id, file, name, kind, signature, start_line, end_line}`;
-  const symbolsRes = await runAstGraphQuery(repoRoot, symbolsQuery);
+  const symbolsRes = await runAstGraphQuery(repoRoot, symbolsQuery, { limit: maxNodes });
   const symbolsRaw = Array.isArray(symbolsRes?.rows) ? symbolsRes.rows : [];
   
   if (symbolsRaw.length === 0) {
@@ -48,7 +48,7 @@ export async function generateRepoMap(options: RepoMapOptions): Promise<FileRank
   }
 
   const symbolMap = new Map<string, any>();
-  for (const row of symbolsRaw.slice(0, maxNodes)) {
+  for (const row of symbolsRaw) {
     symbolMap.set(row[0], {
       id: row[0],
       file: row[1],
@@ -65,6 +65,7 @@ export async function generateRepoMap(options: RepoMapOptions): Promise<FileRank
   const relationsQuery = `
     ?[from_id, to_id] := *ast_call_name{caller_id: from_id, callee_name: name}, *ast_symbol{ref_id: to_id, name}
     ?[from_id, to_id] := *ast_ref_name{from_id, name}, *ast_symbol{ref_id: to_id, name}
+    LIMIT ${maxNodes * 10}
   `;
   const relationsRes = await runAstGraphQuery(repoRoot, relationsQuery);
   const relationsRaw = Array.isArray(relationsRes?.rows) ? relationsRes.rows : [];
