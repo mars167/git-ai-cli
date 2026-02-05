@@ -26,6 +26,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Build index
+        run: node dist/bin/git-ai.js ai index --overwrite
+
       - name: Test
         run: npm test
 
