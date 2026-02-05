@@ -286,6 +286,79 @@ That's it! 3 steps to get started, immediately begin deep understanding of your 
 
 ---
 
+## ⚙️ Configuration
+
+### File Filtering
+
+git-ai respects your project's ignore files to control which files are indexed:
+
+#### `.gitignore` - Standard Git Ignore
+
+Files matching patterns in `.gitignore` are excluded from indexing by default.
+
+#### `.aiignore` - AI-Specific Exclusions (Highest Priority)
+
+Create a `.aiignore` file in your repository root to exclude specific files from indexing that should be ignored by git-ai but not necessarily by Git:
+
+```bash
+# Example .aiignore
+test-fixtures/**
+*.generated.ts
+docs/api-reference/**
+```
+
+#### `.git-ai/include.txt` - Force Include (Overrides `.gitignore`)
+
+Sometimes you need to index generated code or files that are in `.gitignore` but important for code understanding. Create `.git-ai/include.txt` to force-index specific patterns:
+
+```bash
+# Example .git-ai/include.txt
+# Include generated API clients
+generated/api/**
+
+# Include specific build artifacts that contain important types
+dist/types/**
+
+# Include code from specific ignored directories
+vendor/important-lib/**
+```
+
+**Priority Order (Highest to Lowest):**
+1. `.aiignore` - Explicit exclusions always win
+2. `.git-ai/include.txt` - Force-include patterns override `.gitignore`
+3. `.gitignore` - Standard Git ignore patterns
+
+**Supported Pattern Syntax:**
+- `**` - Match any number of directories
+- `*` - Match any characters within a directory
+- `directory/` - Match entire directory (automatically converts to `directory/**`)
+- `file.ts` - Match specific file
+- Lines starting with `#` are comments
+
+**Example Configuration:**
+
+```bash
+# .gitignore
+dist/
+generated/
+*.log
+
+# .git-ai/include.txt
+generated/api/**
+generated/types/**
+
+# .aiignore (overrides everything)
+generated/test-data/**
+```
+
+With this configuration:
+- ✅ `generated/api/client.ts` - Indexed (included via include.txt)
+- ✅ `generated/types/models.ts` - Indexed (included via include.txt)
+- ❌ `generated/test-data/mock.ts` - Not indexed (.aiignore takes priority)
+- ❌ `dist/bundle.js` - Not indexed (.gitignore, not in include.txt)
+
+---
+
 ## 🛠️ Troubleshooting
 
 ### Windows Installation Issues
