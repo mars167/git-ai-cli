@@ -13,6 +13,10 @@ export interface IndexingConfig {
   batchSize: number;
   memoryBudgetMb: number;
   hnswConfig: HNSWParameters;
+  /** Enable true multi-threading via worker_threads for CPU-bound operations. */
+  useWorkerThreads: boolean;
+  /** Minimum number of files before enabling worker threads (avoid startup overhead for small repos). */
+  workerThreadsMinFiles: number;
 }
 
 export type ParseFailureFallback = 'skip' | 'line-chunk' | 'text-only';
@@ -42,6 +46,8 @@ export function defaultIndexingConfig(): IndexingConfig {
       efSearch: 100,
       quantizationBits: 8,
     }),
+    useWorkerThreads: true,
+    workerThreadsMinFiles: 50,
   };
 }
 

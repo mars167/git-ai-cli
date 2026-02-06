@@ -9,6 +9,8 @@ import { sha256Hex } from '../crypto';
 import { toPosixPath } from '../paths';
 import { ErrorHandlingConfig, IndexingConfig } from './config';
 import { MemoryMonitor } from './monitor';
+import { IndexingWorkerPool } from './pool';
+import type { WorkerFileResult } from './worker';
 
 export interface ParallelIndexOptions {
   repoRoot: string;
@@ -34,7 +36,149 @@ export interface ParallelIndexResult {
   astCallsName: Array<[string, string, string, string, number, number]>;
 }
 
+/**
+ * Run indexing with optional worker_threads parallelism.
+ *
+ * When `useWorkerThreads` is enabled and the file count exceeds the threshold,
+ * CPU-bound work (parsing, embedding, quantisation) is offloaded to a thread
+ * pool while the main thread handles file I/O. Otherwise falls back to the
+ * original single-threaded Promise-based concurrency.
+ */
 export async function runParallelIndexing(options: ParallelIndexOptions): Promise<ParallelIndexResult> {
+  const { indexing, files } = options;
+  const useThreads =
+    indexing.useWorkerThreads &&
+    files.length >= indexing.workerThreadsMinFiles;
+
+  if (useThreads) {
+    const pool = IndexingWorkerPool.create({ poolSize: Math.max(1, indexing.workerCount) });
+    if (pool) {
+      try {
+        return await runWithWorkerPool(options, pool);
+      } finally {
+        await pool.close();
+      }
+    }
+    // Pool creation failed — fall through to single-threaded path
+  }
+
+  return runSingleThreaded(options);
+}
+
+// ── Worker-thread path ─────────────────────────────────────────────────────
+
+async function runWithWorkerPool(
+  options: ParallelIndexOptions,
+  pool: IndexingWorkerPool,
+): Promise<ParallelIndexResult> {
+  const monitor = MemoryMonitor.fromErrorConfig(options.errorHandling, options.indexing.memoryBudgetMb);
+  const pendingFiles = options.files.slice();
+  const totalFiles = pendingFiles.length;
+  let processedFiles = 0;
+  const batchSize = Math.max(1, options.indexing.batchSize);
+
+  const state: ParallelIndexResult = {
+    chunkRowsByLang: {},
+    refRowsByLang: {},
+    astFiles: [],
+    astSymbols: [],
+    astContains: [],
+    astExtendsName: [],
+    astImplementsName: [],
+    astRefsName: [],
+    astCallsName: [],
+  };
+
+  // Collect initial existing hashes per language (snapshot — workers use this)
+  const existingHashArrayByLang: Partial<Record<IndexLang, string[]>> = {};
+  for (const lang of Object.keys(options.existingChunkIdsByLang) as IndexLang[]) {
+    existingHashArrayByLang[lang] = Array.from(options.existingChunkIdsByLang[lang] ?? []);
+  }
+
+  // Track new hashes added during this run to deduplicate across workers
+  const seenChunkHashes = new Map<IndexLang, Set<string>>();
+  for (const lang of Object.keys(options.existingChunkIdsByLang) as IndexLang[]) {
+    seenChunkHashes.set(lang, new Set(options.existingChunkIdsByLang[lang]));
+  }
+
+  const mergeWorkerResult = (wr: WorkerFileResult): void => {
+    const lang = wr.lang as IndexLang;
+    if (!state.chunkRowsByLang[lang]) state.chunkRowsByLang[lang] = [];
+    if (!state.refRowsByLang[lang]) state.refRowsByLang[lang] = [];
+    if (!seenChunkHashes.has(lang)) seenChunkHashes.set(lang, new Set<string>());
+    const seen = seenChunkHashes.get(lang)!;
+
+    // Deduplicate chunk rows across workers
+    for (const chunk of wr.chunkRows) {
+      if (!seen.has(chunk.content_hash)) {
+        state.chunkRowsByLang[lang]!.push(chunk);
+        seen.add(chunk.content_hash);
+      }
+    }
+
+    state.refRowsByLang[lang]!.push(...wr.refRows);
+    state.astFiles.push(wr.astFileEntry);
+    state.astSymbols.push(...wr.astSymbols);
+    state.astContains.push(...wr.astContains);
+    state.astExtendsName.push(...wr.astExtendsName);
+    state.astImplementsName.push(...wr.astImplementsName);
+    state.astRefsName.push(...wr.astRefsName);
+    state.astCallsName.push(...wr.astCallsName);
+  };
+
+  options.onProgress?.({ totalFiles, processedFiles: 0 });
+
+  // Process in batches to allow GC between batches
+  while (pendingFiles.length > 0) {
+    const batch = pendingFiles.splice(0, batchSize);
+
+    // Read files on the main thread (I/O), then dispatch CPU work to pool
+    const tasks: Array<Promise<void>> = [];
+    for (const file of batch) {
+      const task = (async () => {
+        const filePosix = toPosixPath(file);
+        processedFiles++;
+        options.onProgress?.({ totalFiles, processedFiles, currentFile: filePosix });
+
+        await monitor.throttleIfNeeded();
+
+        const fullPath = path.join(options.scanRoot, file);
+        const content = await readFileWithGate(fullPath, options.errorHandling);
+        if (content == null) return;
+
+        const lang = inferIndexLang(filePosix);
+        const existingHashes = existingHashArrayByLang[lang] ?? [];
+
+        const result = await pool.processFile({
+          filePath: filePosix,
+          content,
+          dim: options.dim,
+          quantizationBits: options.indexing.hnswConfig.quantizationBits,
+          existingChunkHashes: existingHashes,
+        });
+
+        if (result) {
+          mergeWorkerResult(result);
+        }
+
+        const snapshot = monitor.sample();
+        if (snapshot.critical) {
+          options.onThrottle?.({ rssMb: snapshot.rssMb, usageRatio: snapshot.usageRatio });
+          await monitor.throttleIfNeeded();
+        }
+      })();
+      tasks.push(task);
+    }
+
+    await Promise.all(tasks);
+  }
+
+  return state;
+}
+
+// ── Single-threaded fallback (original implementation) ─────────────────────
+
+async function runSingleThreaded(options: ParallelIndexOptions): Promise<ParallelIndexResult> {
   const parser = new SnapshotCodeParser();
   const monitor = MemoryMonitor.fromErrorConfig(options.errorHandling, options.indexing.memoryBudgetMb);
   const pendingFiles = options.files.slice();
@@ -189,6 +333,8 @@ export async function runParallelIndexing(options: ParallelIndexOptions): Promis
 
   return state;
 }
+
+// ── Shared helpers ─────────────────────────────────────────────────────────
 
 async function safeStat(filePath: string): Promise<fs.Stats | null> {
   try {
