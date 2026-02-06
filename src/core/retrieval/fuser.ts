@@ -33,9 +33,7 @@ export function fuseResults(
         ? weights.vectorWeight
         : c.source === 'graph'
           ? weights.graphWeight
-          : c.source === 'dsr'
-            ? weights.dsrWeight
-            : weights.symbolWeight;
+          : weights.symbolWeight;
     const fusedScore = normalizedScore * weight;
     return { ...c, normalizedScore, fusedScore, rank: 0 };
   });

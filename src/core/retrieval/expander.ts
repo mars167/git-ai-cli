@@ -27,7 +27,6 @@ const SYNONYMS: Record<string, string[]> = {
 };
 
 const DOMAIN_VOCAB: Record<string, string[]> = {
-  dsr: ['deterministic semantic record', 'semantic snapshot'],
   lancedb: ['vector database', 'lance db'],
   cozo: ['graph database', 'cozodb'],
   ast: ['syntax tree', 'abstract syntax tree'],

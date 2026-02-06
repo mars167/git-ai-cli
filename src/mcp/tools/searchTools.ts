@@ -57,6 +57,8 @@ export const repoMapDefinition: ToolDefinition = {
       path: { type: 'string', description: 'Repository root path' },
       max_files: { type: 'number', default: 20 },
       max_symbols: { type: 'number', default: 5 },
+      depth: { type: 'number', default: 5, description: 'PageRank iterations (1-20)' },
+      max_nodes: { type: 'number', default: 5000, description: 'Max symbols to process for performance' },
       wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' }
     },
     required: ['path']

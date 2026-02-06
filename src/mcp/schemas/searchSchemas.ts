@@ -52,6 +52,8 @@ export const RepoMapArgsSchema = z.object({
   path: z.string().min(1, 'path is required'),
   max_files: z.number().int().positive().default(20),
   max_symbols: z.number().int().positive().default(5),
+  depth: z.number().int().min(1).max(20).default(5),
+  max_nodes: z.number().int().positive().default(5000),
   wiki_dir: z.string().optional(),
 });
 

@@ -99,10 +99,6 @@ export class GitAIV2MCPServer {
       ast_graph_callers: schemas.AstGraphCallersArgsSchema,
       ast_graph_callees: schemas.AstGraphCalleesArgsSchema,
       ast_graph_chain: schemas.AstGraphChainArgsSchema,
-      dsr_context: schemas.DsrContextArgsSchema,
-      dsr_generate: schemas.DsrGenerateArgsSchema,
-      dsr_rebuild_index: schemas.DsrRebuildIndexArgsSchema,
-      dsr_symbol_evolution: schemas.DsrSymbolEvolutionArgsSchema,
     };
 
     for (const tool of allTools) {

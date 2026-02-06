@@ -1,14 +1,14 @@
 import Parser from 'tree-sitter';
 import { ParseResult, SymbolInfo } from '../types';
-import { LanguageAdapter } from '../parser/adapter';
-import { TypeScriptAdapter } from '../parser/typescript';
-import { JavaAdapter } from '../parser/java';
-import { CAdapter } from '../parser/c';
-import { GoAdapter } from '../parser/go';
-import { PythonAdapter } from '../parser/python';
-import { RustAdapter } from '../parser/rust';
-import { parseMarkdown } from '../parser/markdown';
-import { parseYaml } from '../parser/yaml';
+import { LanguageAdapter } from './adapter';
+import { TypeScriptAdapter } from './typescript';
+import { JavaAdapter } from './java';
+import { CAdapter } from './c';
+import { GoAdapter } from './go';
+import { PythonAdapter } from './python';
+import { RustAdapter } from './rust';
+import { parseMarkdown } from './markdown';
+import { parseYaml } from './yaml';
 
 export interface ParsedSymbolSnapshot {
   symbol: SymbolInfo;

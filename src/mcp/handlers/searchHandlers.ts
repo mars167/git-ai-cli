@@ -107,13 +107,17 @@ export const handleRepoMap: ToolHandler<RepoMapArgs> = async (args) => {
   const wikiDir = resolveWikiDirInsideRepo(repoRoot, args.wiki_dir ?? '');
   const maxFiles = args.max_files ?? 20;
   const maxSymbolsPerFile = args.max_symbols ?? 5;
+  const depth = args.depth ?? 5;
+  const maxNodes = args.max_nodes ?? 5000;
   
   try {
     const files = await generateRepoMap({
       repoRoot,
       maxFiles,
       maxSymbolsPerFile,
-      wikiDir: wikiDir || undefined
+      wikiDir: wikiDir || undefined,
+      depth,
+      maxNodes
     });
     
     if (files.length === 0) {

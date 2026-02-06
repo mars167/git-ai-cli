@@ -24,12 +24,6 @@ import {
   astGraphCalleesDefinition,
   astGraphChainDefinition
 } from './astGraphTools';
-import {
-  dsrContextDefinition,
-  dsrGenerateDefinition,
-  dsrRebuildIndexDefinition,
-  dsrSymbolEvolutionDefinition
-} from './dsrTools';
 
 export const allTools: ToolDefinition[] = [
   // Repo tools (5)
@@ -56,16 +50,9 @@ export const allTools: ToolDefinition[] = [
   astGraphCallersDefinition,
   astGraphCalleesDefinition,
   astGraphChainDefinition,
-
-  // DSR tools (4)
-  dsrContextDefinition,
-  dsrGenerateDefinition,
-  dsrRebuildIndexDefinition,
-  dsrSymbolEvolutionDefinition,
 ];
 
 export * from './repoTools';
 export * from './fileTools';
 export * from './searchTools';
 export * from './astGraphTools';
-export * from './dsrTools';
