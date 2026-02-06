@@ -71,6 +71,20 @@ export class JavaAdapter implements LanguageAdapter {
           symbols.push(classSym);
           currentContainer = classSym;
         }
+      } else if (n.type === 'field_declaration') {
+        const declarator = findFirstByType(n, ['variable_declarator']);
+        const nameNode = declarator?.childForFieldName('name');
+        if (nameNode) {
+          const fieldSym: SymbolInfo = {
+            name: nameNode.text,
+            kind: 'field',
+            startLine: n.startPosition.row + 1,
+            endLine: n.endPosition.row + 1,
+            signature: n.text.split(';')[0].trim(),
+            container,
+          };
+          symbols.push(fieldSym);
+        }
       }
 
       for (let i = 0; i < n.childCount; i++) traverse(n.child(i)!, currentContainer);

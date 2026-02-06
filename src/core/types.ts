@@ -1,4 +1,4 @@
-export type SymbolKind = 'function' | 'class' | 'method' | 'section' | 'document' | 'node';
+export type SymbolKind = 'function' | 'class' | 'method' | 'section' | 'document' | 'node' | 'field';
 
 export interface SymbolInfo {
   name: string;
