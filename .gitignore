@@ -14,3 +14,4 @@ dist/
 .vscode/
 .trae/documents/
 .trae/
+.cursor/
