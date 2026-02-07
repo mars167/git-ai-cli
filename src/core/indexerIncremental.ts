@@ -14,6 +14,7 @@ import { SnapshotCodeParser } from './parser/snapshotParser';
 import { getCurrentCommitHash } from './git';
 import { IndexingWorkerPool } from './indexing/pool';
 import type { WorkerFileResult } from './indexing/worker';
+import { defaultIndexingConfig, IndexingConfig } from './indexing/config';
 
 export interface IncrementalIndexOptions {
   repoRoot: string;
@@ -22,6 +23,7 @@ export interface IncrementalIndexOptions {
   source: 'worktree' | 'staged';
   changes: GitDiffPathChange[];
   onProgress?: (p: { totalFiles: number; processedFiles: number; currentFile?: string }) => void;
+  indexingConfig?: Partial<IndexingConfig>;
 }
 
 async function loadIgnorePatterns(repoRoot: string, fileName: string): Promise<string[]> {
@@ -163,6 +165,7 @@ export class IncrementalIndexerV2 {
   private source: IncrementalIndexOptions['source'];
   private changes: GitDiffPathChange[];
   private onProgress?: IncrementalIndexOptions['onProgress'];
+  private indexingConfig: IndexingConfig;
   private parser: SnapshotCodeParser;
 
   constructor(options: IncrementalIndexOptions) {
@@ -172,6 +175,7 @@ export class IncrementalIndexerV2 {
     this.source = options.source;
     this.changes = options.changes;
     this.onProgress = options.onProgress;
+    this.indexingConfig = { ...defaultIndexingConfig(), ...options.indexingConfig };
     this.parser = new SnapshotCodeParser();
   }
 
@@ -234,8 +238,7 @@ export class IncrementalIndexerV2 {
     }
 
     // Phase B: Process files — use worker threads when enough files, else single-threaded
-    const WORKER_THREAD_MIN_FILES = 20;
-    const useWorkerThreads = filesToIndex.length >= WORKER_THREAD_MIN_FILES;
+    const useWorkerThreads = this.indexingConfig.useWorkerThreads && filesToIndex.length >= this.indexingConfig.workerThreadsMinFiles;
     let pool: IndexingWorkerPool | null = null;
 
     if (useWorkerThreads) {
@@ -246,11 +249,28 @@ export class IncrementalIndexerV2 {
     try {
       if (pool) {
         // ── Worker-thread path: main thread reads, workers parse + embed ──
+        const existingChunkIdsByLang: Partial<Record<IndexLang, Set<string>>> = {};
+        for (const lang of ALL_INDEX_LANGS) {
+          const t = (byLang as any)[lang];
+          if (!t) continue;
+          const existing = new Set<string>();
+          try {
+            const rows = await t.chunks.query().select(['content_hash']).toArray();
+            for (const row of rows as any[]) {
+              const id = String(row.content_hash ?? '');
+              if (id) existing.add(id);
+            }
+          } catch {
+            // Table might not exist yet
+          }
+          existingChunkIdsByLang[lang] = existing;
+        }
+
         await this.processFilesWithPool(pool, filesToIndex, {
           chunkRowsByLang, refRowsByLang,
           astFiles, astSymbols, astContains, astExtendsName, astImplementsName, astRefsName, astCallsName,
           totalFiles,
-        });
+        }, existingChunkIdsByLang);
       } else {
         // ── Single-threaded fallback ──
         await this.processFilesSingleThreaded(filesToIndex, {
@@ -378,6 +398,7 @@ export class IncrementalIndexerV2 {
       astCallsName: Array<[string, string, string, string, number, number]>;
       totalFiles: number;
     },
+    existingChunkIdsByLang: Partial<Record<IndexLang, Set<string>>>,
   ): Promise<void> {
     let processed = 0;
     const seenChunkHashes = new Set<string>();
@@ -415,17 +436,24 @@ export class IncrementalIndexerV2 {
           : await readWorktreeFile(this.scanRoot, item.filePosix);
         if (content == null) return;
 
+        const lang = inferIndexLang(item.filePosix);
+        const existingHashes = Array.from(existingChunkIdsByLang[lang] ?? []);
+
         const result = await pool.processFile({
           filePath: item.filePosix,
           content,
           dim: this.dim,
           quantizationBits: 8,
-          existingChunkHashes: [],
+          existingChunkHashes: existingHashes,
         });
 
         if (result) mergeResult(result);
       })();
       tasks.push(task);
+
+      if (tasks.length >= pool.size * 2) {
+        await Promise.race(tasks);
+      }
     }
 
     await Promise.all(tasks);

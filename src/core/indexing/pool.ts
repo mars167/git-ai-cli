@@ -42,6 +42,7 @@ export class IndexingWorkerPool {
     resolve: (result: WorkerFileResult | null) => void;
     reject: (err: Error) => void;
   }>();
+  private workerTaskIds = new Map<Worker, number>();
   private closed = false;
 
   private constructor(private readonly poolSize: number) {}
@@ -93,6 +94,12 @@ export class IndexingWorkerPool {
       pending.reject(new Error('Pool closed before task could be dispatched'));
     }
     this.pendingTasks = [];
+    // Reject all in-flight tasks before terminating workers
+    for (const [id, entry] of this.resolvers.entries()) {
+      entry.reject(new Error('Pool closed while task was in progress'));
+      this.resolvers.delete(id);
+    }
+    this.workerTaskIds.clear();
     await Promise.all(this.workers.map((w) => w.terminate()));
     this.workers = [];
     this.idleWorkers = [];
@@ -112,6 +119,7 @@ export class IndexingWorkerPool {
   ): void {
     const id = this.nextId++;
     this.resolvers.set(id, { resolve, reject });
+    this.workerTaskIds.set(worker, id);
     const msg: WorkerRequest = {
       id,
       filePath: task.filePath,
@@ -124,6 +132,7 @@ export class IndexingWorkerPool {
   }
 
   private handleMessage(worker: Worker, msg: WorkerResponse): void {
+    this.workerTaskIds.delete(worker);
     const entry = this.resolvers.get(msg.id);
     if (entry) {
       this.resolvers.delete(msg.id);
@@ -145,8 +154,6 @@ export class IndexingWorkerPool {
   }
 
   private handleWorkerError(worker: Worker, err: Error): void {
-    // Reject all pending resolvers for this worker (there should be at most 1)
-    // The worker might be dead — remove it and try to replace if pool isn't closing
     const idx = this.workers.indexOf(worker);
     if (idx !== -1) {
       this.workers.splice(idx, 1);
@@ -156,13 +163,19 @@ export class IndexingWorkerPool {
       this.idleWorkers.splice(idleIdx, 1);
     }
 
-    // Reject any resolvers waiting on this worker's current task
-    for (const [id, entry] of this.resolvers.entries()) {
-      entry.reject(err);
-      this.resolvers.delete(id);
+    const taskId = this.workerTaskIds.get(worker);
+    this.workerTaskIds.delete(worker);
+    if (taskId !== undefined) {
+      const entry = this.resolvers.get(taskId);
+      if (entry) {
+        entry.reject(err);
+        this.resolvers.delete(taskId);
+      }
     }
   }
 }
+
+export type { WorkerFileResult };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

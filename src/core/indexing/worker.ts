@@ -9,7 +9,7 @@
  *   Main  → Worker : WorkerRequest  (file path + content + config)
  *   Worker → Main  : WorkerResponse (parsed symbols, refs, chunks, AST data)
  */
-import { parentPort, workerData } from 'worker_threads';
+import { parentPort } from 'worker_threads';
 import { SnapshotCodeParser } from '../parser/snapshotParser';
 import { hashEmbedding } from '../embedding';
 import { quantizeSQ8 } from '../sq8';
@@ -76,9 +76,20 @@ function processFile(
   const lang = inferIndexLang(filePath);
   const existingSet = new Set(existingChunkHashes);
 
-  const parsed = parser.parseContent(filePath, content);
-  const symbols: SymbolInfo[] = parsed.symbols;
-  const fileRefs: AstReference[] = parsed.refs;
+  // Parse with fallback: on failure, degrade gracefully to empty symbols/refs
+  // instead of throwing, ensuring consistent behavior with single-threaded path
+  let symbols: SymbolInfo[] = [];
+  let fileRefs: AstReference[] = [];
+  try {
+    const parsed = parser.parseContent(filePath, content);
+    symbols = parsed.symbols ?? [];
+    fileRefs = parsed.refs ?? [];
+  } catch {
+    // On parse failure, fall back to empty symbol/ref set.
+    // This mirrors single-threaded behavior where parse failures don't skip the file.
+    symbols = [];
+    fileRefs = [];
+  }
   const fileId = sha256Hex(`file:${filePath}`);
 
   const chunkRows: ChunkRow[] = [];

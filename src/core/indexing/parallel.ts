@@ -89,12 +89,6 @@ async function runWithWorkerPool(
     astCallsName: [],
   };
 
-  // Collect initial existing hashes per language (snapshot — workers use this)
-  const existingHashArrayByLang: Partial<Record<IndexLang, string[]>> = {};
-  for (const lang of Object.keys(options.existingChunkIdsByLang) as IndexLang[]) {
-    existingHashArrayByLang[lang] = Array.from(options.existingChunkIdsByLang[lang] ?? []);
-  }
-
   // Track new hashes added during this run to deduplicate across workers
   const seenChunkHashes = new Map<IndexLang, Set<string>>();
   for (const lang of Object.keys(options.existingChunkIdsByLang) as IndexLang[]) {
@@ -147,14 +141,13 @@ async function runWithWorkerPool(
         if (content == null) return;
 
         const lang = inferIndexLang(filePosix);
-        const existingHashes = existingHashArrayByLang[lang] ?? [];
 
         const result = await pool.processFile({
           filePath: filePosix,
           content,
           dim: options.dim,
           quantizationBits: options.indexing.hnswConfig.quantizationBits,
-          existingChunkHashes: existingHashes,
+          existingChunkHashes: [],
         });
 
         if (result) {
