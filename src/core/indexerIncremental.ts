@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
+import os from 'os';
 import simpleGit from 'simple-git';
 import { sha256Hex } from './crypto';
 import { defaultDbDir, IndexLang, openTablesByLang, ALL_INDEX_LANGS } from './lancedb';
@@ -11,6 +12,9 @@ import { ChunkRow, RefRow } from './types';
 import { GitDiffPathChange } from './gitDiff';
 import { SnapshotCodeParser } from './parser/snapshotParser';
 import { getCurrentCommitHash } from './git';
+import { IndexingWorkerPool } from './indexing/pool';
+import type { WorkerFileResult } from './indexing/worker';
+import { defaultIndexingConfig, IndexingConfig } from './indexing/config';
 
 export interface IncrementalIndexOptions {
   repoRoot: string;
@@ -19,6 +23,7 @@ export interface IncrementalIndexOptions {
   source: 'worktree' | 'staged';
   changes: GitDiffPathChange[];
   onProgress?: (p: { totalFiles: number; processedFiles: number; currentFile?: string }) => void;
+  indexingConfig?: Partial<IndexingConfig>;
 }
 
 async function loadIgnorePatterns(repoRoot: string, fileName: string): Promise<string[]> {
@@ -160,6 +165,7 @@ export class IncrementalIndexerV2 {
   private source: IncrementalIndexOptions['source'];
   private changes: GitDiffPathChange[];
   private onProgress?: IncrementalIndexOptions['onProgress'];
+  private indexingConfig: IndexingConfig;
   private parser: SnapshotCodeParser;
 
   constructor(options: IncrementalIndexOptions) {
@@ -169,6 +175,7 @@ export class IncrementalIndexerV2 {
     this.source = options.source;
     this.changes = options.changes;
     this.onProgress = options.onProgress;
+    this.indexingConfig = { ...defaultIndexingConfig(), ...options.indexingConfig };
     this.parser = new SnapshotCodeParser();
   }
 
@@ -205,11 +212,10 @@ export class IncrementalIndexerV2 {
     const totalFiles = this.changes.length;
     this.onProgress?.({ totalFiles, processedFiles: 0 });
 
-    let processed = 0;
+    // Phase A: Sequential deletions — DB operations must be serialized for safety
+    const filesToIndex: Array<{ filePosix: string; ch: GitDiffPathChange }> = [];
     for (const ch of this.changes) {
-      processed++;
       const filePosix = toPosixPath(ch.path);
-      this.onProgress?.({ totalFiles, processedFiles: processed, currentFile: filePosix });
 
       if (ch.status === 'R' && ch.oldPath) {
         const oldFile = toPosixPath(ch.oldPath);
@@ -226,132 +232,105 @@ export class IncrementalIndexerV2 {
       await removeFileFromAstGraph(this.repoRoot, filePosix);
 
       if (!isIndexableFile(filePosix)) continue;
-
-      // Check if file should be indexed based on ignore/include patterns
       if (!shouldIndexFile(filePosix, aiIgnore, gitIgnore, includePatterns)) continue;
 
-      const lang = inferIndexLang(filePosix);
-      if (!chunkRowsByLang[lang]) chunkRowsByLang[lang] = [];
-      if (!refRowsByLang[lang]) refRowsByLang[lang] = [];
-      if (!candidateChunksByLang[lang]) candidateChunksByLang[lang] = new Map<string, string>();
-      if (!neededHashByLang[lang]) neededHashByLang[lang] = new Set<string>();
-
-      const content = this.source === 'staged'
-        ? await readStagedFile(this.repoRoot, filePosix)
-        : await readWorktreeFile(this.scanRoot, filePosix);
-      if (content == null) continue;
-
-      const parsed = this.parser.parseContent(filePosix, content);
-      const symbols = parsed.symbols;
-      const fileRefs = parsed.refs;
-      const fileId = sha256Hex(`file:${filePosix}`);
-      astFiles.push([fileId, filePosix, lang]);
-
-      const callableScopes: Array<{ refId: string; startLine: number; endLine: number }> = [];
-      for (const s of symbols) {
-        const text = buildChunkText(filePosix, s);
-        const contentHash = sha256Hex(text);
-        const refId = sha256Hex(`${filePosix}:${s.name}:${s.kind}:${s.startLine}:${s.endLine}:${contentHash}`);
-
-        astSymbols.push([refId, filePosix, lang, s.name, s.kind, s.signature, s.startLine, s.endLine]);
-        if (s.kind === 'function' || s.kind === 'method') {
-          callableScopes.push({ refId, startLine: s.startLine, endLine: s.endLine });
-        }
-
-        let parentId = fileId;
-        if (s.container) {
-          const cText = buildChunkText(filePosix, s.container);
-          const cHash = sha256Hex(cText);
-          parentId = sha256Hex(`${filePosix}:${s.container.name}:${s.container.kind}:${s.container.startLine}:${s.container.endLine}:${cHash}`);
-        }
-        astContains.push([parentId, refId]);
-
-        if (s.kind === 'class') {
-          if (s.extends) for (const superName of s.extends) astExtendsName.push([refId, superName]);
-          if (s.implements) for (const ifaceName of s.implements) astImplementsName.push([refId, ifaceName]);
-        }
-
-        neededHashByLang[lang]!.add(contentHash);
-        candidateChunksByLang[lang]!.set(contentHash, text);
-
-        const refRow: RefRow = {
-          ref_id: refId,
-          content_hash: contentHash,
-          file: filePosix,
-          symbol: s.name,
-          kind: s.kind,
-          signature: s.signature,
-          start_line: s.startLine,
-          end_line: s.endLine,
-        };
-        refRowsByLang[lang]!.push(refRow as any);
-      }
-
-      const pickScope = (line: number): string => {
-        let best: { refId: string; span: number } | null = null;
-        for (const s of callableScopes) {
-          if (line < s.startLine || line > s.endLine) continue;
-          const span = s.endLine - s.startLine;
-          if (!best || span < best.span) best = { refId: s.refId, span };
-        }
-        return best ? best.refId : fileId;
-      };
-
-      for (const r of fileRefs) {
-        const fromId = pickScope(r.line);
-        astRefsName.push([fromId, lang, r.name, r.refKind, filePosix, r.line, r.column]);
-        if (r.refKind === 'call' || r.refKind === 'new') {
-          astCallsName.push([fromId, lang, r.name, filePosix, r.line, r.column]);
-        }
-      }
+      filesToIndex.push({ filePosix, ch });
     }
 
-    const existingChunkIdsByLang: Partial<Record<IndexLang, Set<string>>> = {};
-    for (const lang of Object.keys(neededHashByLang) as IndexLang[]) {
-      const t = (byLang as any)[lang];
-      if (!t) continue;
-      const needed = Array.from(neededHashByLang[lang] ?? []);
-      const existing = new Set<string>();
-      for (let i = 0; i < needed.length; i += 400) {
-        const chunk = needed.slice(i, i + 400);
-        if (chunk.length === 0) continue;
-        const pred = `content_hash IN (${chunk.map((h) => `'${escapeQuotes(h)}'`).join(',')})`;
-        const rows = await t.chunks.query().where(pred).select(['content_hash']).limit(chunk.length).toArray();
-        for (const row of rows as any[]) {
-          const id = String(row.content_hash ?? '');
-          if (id) existing.add(id);
-        }
-      }
-      existingChunkIdsByLang[lang] = existing;
+    // Phase B: Process files — use worker threads when enough files, else single-threaded
+    const useWorkerThreads = this.indexingConfig.useWorkerThreads && filesToIndex.length >= this.indexingConfig.workerThreadsMinFiles;
+    let pool: IndexingWorkerPool | null = null;
+
+    if (useWorkerThreads) {
+      const poolSize = Math.max(1, Math.min(filesToIndex.length, (os.cpus()?.length ?? 2) - 1));
+      pool = IndexingWorkerPool.create({ poolSize });
     }
 
-    for (const lang of Object.keys(candidateChunksByLang) as IndexLang[]) {
-      const t = (byLang as any)[lang];
-      if (!t) continue;
-      const existing = existingChunkIdsByLang[lang] ?? new Set<string>();
-      const chunkRows: ChunkRow[] = [];
-      const candidates = candidateChunksByLang[lang]!;
-      for (const [contentHash, text] of candidates.entries()) {
-        if (!contentHash || !text) continue;
-        if (existing.has(contentHash)) continue;
-        const vec = hashEmbedding(text, { dim: this.dim });
-        const q = quantizeSQ8(vec);
-        chunkRows.push({
-          content_hash: contentHash,
-          text,
-          dim: q.dim,
-          scale: q.scale,
-          qvec_b64: Buffer.from(q.q).toString('base64'),
+    try {
+      if (pool) {
+        // ── Worker-thread path: main thread reads, workers parse + embed ──
+        const existingChunkIdsByLang: Partial<Record<IndexLang, Set<string>>> = {};
+        for (const lang of ALL_INDEX_LANGS) {
+          const t = (byLang as any)[lang];
+          if (!t) continue;
+          const existing = new Set<string>();
+          try {
+            const rows = await t.chunks.query().select(['content_hash']).toArray();
+            for (const row of rows as any[]) {
+              const id = String(row.content_hash ?? '');
+              if (id) existing.add(id);
+            }
+          } catch {
+            // Table might not exist yet
+          }
+          existingChunkIdsByLang[lang] = existing;
+        }
+
+        await this.processFilesWithPool(pool, filesToIndex, {
+          chunkRowsByLang, refRowsByLang,
+          astFiles, astSymbols, astContains, astExtendsName, astImplementsName, astRefsName, astCallsName,
+          totalFiles,
+        }, existingChunkIdsByLang);
+      } else {
+        // ── Single-threaded fallback ──
+        await this.processFilesSingleThreaded(filesToIndex, {
+          chunkRowsByLang, refRowsByLang, candidateChunksByLang, neededHashByLang,
+          astFiles, astSymbols, astContains, astExtendsName, astImplementsName, astRefsName, astCallsName,
+          totalFiles,
         });
-        existing.add(contentHash);
+
+        // Check existing chunks and compute embeddings (single-threaded only)
+        const existingChunkIdsByLang: Partial<Record<IndexLang, Set<string>>> = {};
+        for (const lang of Object.keys(neededHashByLang) as IndexLang[]) {
+          const t = (byLang as any)[lang];
+          if (!t) continue;
+          const needed = Array.from(neededHashByLang[lang] ?? []);
+          const existing = new Set<string>();
+          for (let i = 0; i < needed.length; i += 400) {
+            const chunk = needed.slice(i, i + 400);
+            if (chunk.length === 0) continue;
+            const pred = `content_hash IN (${chunk.map((h: string) => `'${escapeQuotes(h)}'`).join(',')})`;
+            const rows = await t.chunks.query().where(pred).select(['content_hash']).limit(chunk.length).toArray();
+            for (const row of rows as any[]) {
+              const id = String(row.content_hash ?? '');
+              if (id) existing.add(id);
+            }
+          }
+          existingChunkIdsByLang[lang] = existing;
+        }
+
+        for (const lang of Object.keys(candidateChunksByLang) as IndexLang[]) {
+          const t = (byLang as any)[lang];
+          if (!t) continue;
+          const existing = existingChunkIdsByLang[lang] ?? new Set<string>();
+          const chunkRows: ChunkRow[] = [];
+          const candidates = candidateChunksByLang[lang]!;
+          for (const [contentHash, text] of candidates.entries()) {
+            if (!contentHash || !text) continue;
+            if (existing.has(contentHash)) continue;
+            const vec = hashEmbedding(text, { dim: this.dim });
+            const q = quantizeSQ8(vec);
+            chunkRows.push({
+              content_hash: contentHash,
+              text,
+              dim: q.dim,
+              scale: q.scale,
+              qvec_b64: Buffer.from(q.q).toString('base64'),
+            });
+            existing.add(contentHash);
+          }
+          chunkRowsByLang[lang] = chunkRows as any[];
+        }
       }
-      chunkRowsByLang[lang] = chunkRows as any[];
+    } finally {
+      if (pool) await pool.close();
     }
 
     const addedByLang: Record<string, { chunksAdded: number; refsAdded: number }> = {};
-    for (const lang of ALL_INDEX_LANGS) {
+    // Write to LanceDB tables in parallel — each language table is independent
+    await Promise.all(ALL_INDEX_LANGS.map(async (lang) => {
       const t = byLang[lang];
-      if (!t) continue;
+      if (!t) return;
       const chunkRows = chunkRowsByLang[lang] ?? [];
       const refRows = refRowsByLang[lang] ?? [];
       if (chunkRows.length > 0) await t.chunks.add(chunkRows);
@@ -359,7 +338,7 @@ export class IncrementalIndexerV2 {
       if (chunkRows.length > 0 || refRows.length > 0) {
         addedByLang[lang] = { chunksAdded: chunkRows.length, refsAdded: refRows.length };
       }
-    }
+    }));
 
     const astGraph = await writeAstGraphToCozo(this.repoRoot, {
       files: astFiles,
@@ -400,5 +379,204 @@ export class IncrementalIndexerV2 {
     await fs.writeJSON(metaPath, meta, { spaces: 2 });
 
     return { processed: this.changes.length, addedByLang };
+  }
+
+  // ── Worker-thread processing ──────────────────────────────────────────
+
+  private async processFilesWithPool(
+    pool: IndexingWorkerPool,
+    filesToIndex: Array<{ filePosix: string; ch: GitDiffPathChange }>,
+    state: {
+      chunkRowsByLang: Partial<Record<IndexLang, any[]>>;
+      refRowsByLang: Partial<Record<IndexLang, any[]>>;
+      astFiles: Array<[string, string, string]>;
+      astSymbols: Array<[string, string, string, string, string, string, number, number]>;
+      astContains: Array<[string, string]>;
+      astExtendsName: Array<[string, string]>;
+      astImplementsName: Array<[string, string]>;
+      astRefsName: Array<[string, string, string, string, string, number, number]>;
+      astCallsName: Array<[string, string, string, string, number, number]>;
+      totalFiles: number;
+    },
+    existingChunkIdsByLang: Partial<Record<IndexLang, Set<string>>>,
+  ): Promise<void> {
+    let processed = 0;
+    const seenChunkHashes = new Set<string>();
+
+    const mergeResult = (wr: WorkerFileResult): void => {
+      const lang = wr.lang as IndexLang;
+      if (!state.chunkRowsByLang[lang]) state.chunkRowsByLang[lang] = [];
+      if (!state.refRowsByLang[lang]) state.refRowsByLang[lang] = [];
+
+      for (const chunk of wr.chunkRows) {
+        if (!seenChunkHashes.has(chunk.content_hash)) {
+          state.chunkRowsByLang[lang]!.push(chunk);
+          seenChunkHashes.add(chunk.content_hash);
+        }
+      }
+
+      state.refRowsByLang[lang]!.push(...wr.refRows);
+      state.astFiles.push(wr.astFileEntry);
+      state.astSymbols.push(...wr.astSymbols);
+      state.astContains.push(...wr.astContains);
+      state.astExtendsName.push(...wr.astExtendsName);
+      state.astImplementsName.push(...wr.astImplementsName);
+      state.astRefsName.push(...wr.astRefsName);
+      state.astCallsName.push(...wr.astCallsName);
+    };
+
+    const tasks: Array<Promise<void>> = [];
+    for (const item of filesToIndex) {
+      const task = (async () => {
+        processed++;
+        this.onProgress?.({ totalFiles: state.totalFiles, processedFiles: processed, currentFile: item.filePosix });
+
+        const content = this.source === 'staged'
+          ? await readStagedFile(this.repoRoot, item.filePosix)
+          : await readWorktreeFile(this.scanRoot, item.filePosix);
+        if (content == null) return;
+
+        const lang = inferIndexLang(item.filePosix);
+        const existingHashes = Array.from(existingChunkIdsByLang[lang] ?? []);
+
+        const result = await pool.processFile({
+          filePath: item.filePosix,
+          content,
+          dim: this.dim,
+          quantizationBits: 8,
+          existingChunkHashes: existingHashes,
+        });
+
+        if (result) mergeResult(result);
+      })();
+      tasks.push(task);
+
+      if (tasks.length >= pool.size * 2) {
+        await Promise.race(tasks);
+      }
+    }
+
+    await Promise.all(tasks);
+  }
+
+  // ── Single-threaded processing ────────────────────────────────────────
+
+  private async processFilesSingleThreaded(
+    filesToIndex: Array<{ filePosix: string; ch: GitDiffPathChange }>,
+    state: {
+      chunkRowsByLang: Partial<Record<IndexLang, any[]>>;
+      refRowsByLang: Partial<Record<IndexLang, any[]>>;
+      candidateChunksByLang: Partial<Record<IndexLang, Map<string, string>>>;
+      neededHashByLang: Partial<Record<IndexLang, Set<string>>>;
+      astFiles: Array<[string, string, string]>;
+      astSymbols: Array<[string, string, string, string, string, string, number, number]>;
+      astContains: Array<[string, string]>;
+      astExtendsName: Array<[string, string]>;
+      astImplementsName: Array<[string, string]>;
+      astRefsName: Array<[string, string, string, string, string, number, number]>;
+      astCallsName: Array<[string, string, string, string, number, number]>;
+      totalFiles: number;
+    },
+  ): Promise<void> {
+    let processed = 0;
+    const concurrency = Math.max(1, Math.min(8, filesToIndex.length));
+    const queue = filesToIndex.slice();
+    const active = new Set<Promise<void>>();
+
+    const processOneFile = async (item: { filePosix: string; ch: GitDiffPathChange }): Promise<void> => {
+      processed++;
+      const { filePosix } = item;
+      this.onProgress?.({ totalFiles: state.totalFiles, processedFiles: processed, currentFile: filePosix });
+
+      const lang = inferIndexLang(filePosix);
+      if (!state.chunkRowsByLang[lang]) state.chunkRowsByLang[lang] = [];
+      if (!state.refRowsByLang[lang]) state.refRowsByLang[lang] = [];
+      if (!state.candidateChunksByLang[lang]) state.candidateChunksByLang[lang] = new Map<string, string>();
+      if (!state.neededHashByLang[lang]) state.neededHashByLang[lang] = new Set<string>();
+
+      const content = this.source === 'staged'
+        ? await readStagedFile(this.repoRoot, filePosix)
+        : await readWorktreeFile(this.scanRoot, filePosix);
+      if (content == null) return;
+
+      const parsed = this.parser.parseContent(filePosix, content);
+      const symbols = parsed.symbols;
+      const fileRefs = parsed.refs;
+      const fileId = sha256Hex(`file:${filePosix}`);
+      state.astFiles.push([fileId, filePosix, lang]);
+
+      const callableScopes: Array<{ refId: string; startLine: number; endLine: number }> = [];
+      for (const s of symbols) {
+        const text = buildChunkText(filePosix, s);
+        const contentHash = sha256Hex(text);
+        const refId = sha256Hex(`${filePosix}:${s.name}:${s.kind}:${s.startLine}:${s.endLine}:${contentHash}`);
+
+        state.astSymbols.push([refId, filePosix, lang, s.name, s.kind, s.signature, s.startLine, s.endLine]);
+        if (s.kind === 'function' || s.kind === 'method') {
+          callableScopes.push({ refId, startLine: s.startLine, endLine: s.endLine });
+        }
+
+        let parentId = fileId;
+        if (s.container) {
+          const cText = buildChunkText(filePosix, s.container);
+          const cHash = sha256Hex(cText);
+          parentId = sha256Hex(`${filePosix}:${s.container.name}:${s.container.kind}:${s.container.startLine}:${s.container.endLine}:${cHash}`);
+        }
+        state.astContains.push([parentId, refId]);
+
+        if (s.kind === 'class') {
+          if (s.extends) for (const superName of s.extends) state.astExtendsName.push([refId, superName]);
+          if (s.implements) for (const ifaceName of s.implements) state.astImplementsName.push([refId, ifaceName]);
+        }
+
+        state.neededHashByLang[lang]!.add(contentHash);
+        state.candidateChunksByLang[lang]!.set(contentHash, text);
+
+        const refRow: RefRow = {
+          ref_id: refId,
+          content_hash: contentHash,
+          file: filePosix,
+          symbol: s.name,
+          kind: s.kind,
+          signature: s.signature,
+          start_line: s.startLine,
+          end_line: s.endLine,
+        };
+        state.refRowsByLang[lang]!.push(refRow as any);
+      }
+
+      const pickScope = (line: number): string => {
+        let best: { refId: string; span: number } | null = null;
+        for (const s of callableScopes) {
+          if (line < s.startLine || line > s.endLine) continue;
+          const span = s.endLine - s.startLine;
+          if (!best || span < best.span) best = { refId: s.refId, span };
+        }
+        return best ? best.refId : fileId;
+      };
+
+      for (const r of fileRefs) {
+        const fromId = pickScope(r.line);
+        state.astRefsName.push([fromId, lang, r.name, r.refKind, filePosix, r.line, r.column]);
+        if (r.refKind === 'call' || r.refKind === 'new') {
+          state.astCallsName.push([fromId, lang, r.name, filePosix, r.line, r.column]);
+        }
+      }
+    };
+
+    const scheduleNext = (): void => {
+      while (active.size < concurrency && queue.length > 0) {
+        const item = queue.shift()!;
+        const task = processOneFile(item).catch(() => undefined).then(() => {
+          active.delete(task);
+        });
+        active.add(task);
+      }
+    };
+    scheduleNext();
+    while (active.size > 0) {
+      await Promise.race(active);
+      scheduleNext();
+    }
   }
 }

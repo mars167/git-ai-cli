@@ -9,14 +9,14 @@ Refactored CLI layer with handler registry, Zod validation, and modular design. 
 ```
 cli/
 ├── types.ts          # Core types: CLIResult, CLIError, CLIHandler, executeHandler
-├── registry.ts       # Handler registry with all 24 commands
+├── registry.ts       # Handler registry with all 20 commands
 ├── helpers.ts        # Shared utilities: resolveRepoContext, validateIndex, formatError
 ├── schemas/          # Zod schemas for all commands
 │   ├── graphSchemas.ts
 │   ├── indexSchemas.ts
 │   ├── semanticSchemas.ts
 │   ├── querySchemas.ts
-│   ├── dsrSchemas.ts
+│   ├── repoMapSchema.ts
 │   ├── statusSchemas.ts
 │   ├── archiveSchemas.ts
 │   ├── hooksSchemas.ts
@@ -26,7 +26,7 @@ cli/
 │   ├── indexHandlers.ts
 │   ├── semanticHandlers.ts
 │   ├── queryHandlers.ts
-│   ├── dsrHandlers.ts
+│   ├── repoMapHandler.ts
 │   ├── statusHandlers.ts
 │   ├── archiveHandlers.ts
 │   ├── hooksHandlers.ts
@@ -36,7 +36,7 @@ cli/
     ├── indexCommand.ts
     ├── semanticCommand.ts
     ├── queryCommand.ts
-    ├── dsrCommands.ts
+    ├── repoMapCommand.ts
     ├── statusCommands.ts
     ├── archiveCommands.ts
     ├── hooksCommands.ts
@@ -131,16 +131,11 @@ const handlers: Record<string, CLIHandler<any>> = {
 - `graph:callees` - Find callees
 - `graph:chain` - Compute call chain
 
-### Core Commands (3 commands)
+### Core Commands (4 commands)
 - `index` - Build repository index
 - `semantic` - Semantic search
 - `query` - Symbol search
-
-### DSR Commands (4 subcommands)
-- `dsr:context` - Get DSR directory state
-- `dsr:generate` - Generate DSR for commit
-- `dsr:rebuild-index` - Rebuild DSR index
-- `dsr:query` - Semantic queries over Git DAG
+- `repo-map` - Generate repository map with PageRank
 
 ### Status Commands (2 commands)
 - `checkIndex` - Check index status (deprecated)

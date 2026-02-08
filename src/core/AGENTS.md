@@ -3,14 +3,14 @@
 **Core indexing, graph, storage, and parser modules.**
 
 ## OVERVIEW
-Indexing engine: LanceDB storage, Cozo graph DB, DSR records, multi-language parsers.
+Indexing engine: LanceDB storage, Cozo graph DB, multi-language parsers.
 
 ## STRUCTURE
 ```
 core/
 ├── indexer.ts, indexerIncremental.ts    # Indexing orchestration
 ├── cozo.ts, astGraph.ts                 # Graph DB + AST queries
-├── dsr/                                 # Deterministic Semantic Records
+├── repoMap.ts                           # PageRank-based repository map
 ├── parser/                              # Language parsers (TS, Go, Rust, Python, C, MD, YAML)
 ├── lancedb.ts                           # Vector storage (SQ8)
 ├── semantic.ts, sq8.ts                  # Semantic search
@@ -23,7 +23,7 @@ core/
 | Full index | `indexer.ts` |
 | Incremental update | `indexerIncremental.ts` |
 | Graph queries | `cozo.ts` (CozoScript), `astGraph.ts` |
-| DSR read/write | `dsr/`, `dsr.ts` |
+| Repo map | `repoMap.ts` |
 | Language parsing | `parser/adapter.ts`, `parser/typescript.ts`, etc. |
 | Vector search | `lancedb.ts`, `semantic.ts` |
 

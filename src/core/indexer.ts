@@ -204,15 +204,16 @@ export class IndexerV2 {
     const astCallsName = parallelResult.astCallsName;
 
     const addedByLang: Record<string, { chunksAdded: number; refsAdded: number }> = {};
-    for (const lang of languages) {
+    // Write to LanceDB tables in parallel — each language table is independent
+    await Promise.all(languages.map(async (lang) => {
       const t = byLang[lang];
-      if (!t) continue;
+      if (!t) return;
       const chunkRows = chunkRowsByLang[lang] ?? [];
       const refRows = refRowsByLang[lang] ?? [];
       if (chunkRows.length > 0) await t.chunks.add(chunkRows as unknown as Record<string, unknown>[]);
       if (refRows.length > 0) await t.refs.add(refRows as unknown as Record<string, unknown>[]);
       addedByLang[lang] = { chunksAdded: chunkRows.length, refsAdded: refRows.length };
-    }
+    }));
 
     const astGraph = await writeAstGraphToCozo(this.repoRoot, {
       files: astFiles,
