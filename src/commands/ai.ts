@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { indexCommand } from '../cli/commands/indexCommand.js';
 import { queryCommand } from '../cli/commands/queryCommand.js';
+import { queryFilesCommand } from '../cli/commands/queryFilesCommand.js';
 import { semanticCommand } from '../cli/commands/semanticCommand.js';
 import { serveCommand, agentCommand } from '../cli/commands/serveCommands.js';
 import { packCommand, unpackCommand } from '../cli/commands/archiveCommands.js';
@@ -16,6 +17,7 @@ export const aiCommand = new Command('ai')
   .addCommand(statusCommand)
   .addCommand(repoMapCommand)
   .addCommand(queryCommand)
+  .addCommand(queryFilesCommand)
   .addCommand(semanticCommand)
   .addCommand(graphCommand)
   .addCommand(packCommand)

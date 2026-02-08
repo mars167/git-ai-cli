@@ -20,9 +20,11 @@ import {
 import { SemanticSearchSchema } from './schemas/semanticSchemas';
 import { IndexRepoSchema } from './schemas/indexSchemas';
 import { SearchSymbolsSchema } from './schemas/querySchemas';
+import { SearchFilesSchema } from './schemas/queryFilesSchemas';
 import { handleSemanticSearch } from './handlers/semanticHandlers';
 import { handleIndexRepo } from './handlers/indexHandlers';
 import { handleSearchSymbols } from './handlers/queryHandlers';
+import { handleSearchFiles } from './handlers/queryFilesHandlers';
 import { CheckIndexSchema, StatusSchema } from './schemas/statusSchemas';
 import { handleCheckIndex, handleStatus } from './handlers/statusHandlers';
 import { PackIndexSchema, UnpackIndexSchema } from './schemas/archiveSchemas';
@@ -58,6 +60,10 @@ export const cliHandlers: Record<string, HandlerRegistration<any>> = {
   'query': {
     schema: SearchSymbolsSchema,
     handler: handleSearchSymbols,
+  },
+  'query-files': {
+    schema: SearchFilesSchema,
+    handler: handleSearchFiles,
   },
   'status': {
     schema: StatusSchema,
