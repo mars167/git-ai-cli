@@ -82,6 +82,70 @@ export class TypeScriptAdapter implements LanguageAdapter {
           symbols.push(classSym);
           currentContainer = classSym;
         }
+      } else if (n.type === 'lexical_declaration' || n.type === 'variable_declaration') {
+        // Handle: const foo = () => {}, const bar = function() {}, const baz = value
+        for (let i = 0; i < n.namedChildCount; i++) {
+          const declarator = n.namedChild(i);
+          if (declarator?.type === 'variable_declarator') {
+            const nameNode = declarator.childForFieldName('name');
+            const valueNode = declarator.childForFieldName('value');
+            
+            if (nameNode && valueNode) {
+              const isFunction = valueNode.type === 'arrow_function' || 
+                                valueNode.type === 'function' ||
+                                valueNode.type === 'function_expression';
+              
+              if (isFunction) {
+                const newSymbol: SymbolInfo = {
+                  name: nameNode.text,
+                  kind: 'function',
+                  startLine: declarator.startPosition.row + 1,
+                  endLine: declarator.endPosition.row + 1,
+                  signature: declarator.text.split('=>')[0].trim() + ' => ...',
+                  container: container,
+                };
+                symbols.push(newSymbol);
+                currentContainer = newSymbol;
+              } else {
+                // Also track exported constants/variables
+                const parent = n.parent;
+                if (parent?.type === 'export_statement') {
+                  const newSymbol: SymbolInfo = {
+                    name: nameNode.text,
+                    kind: 'variable',
+                    startLine: declarator.startPosition.row + 1,
+                    endLine: declarator.endPosition.row + 1,
+                    signature: declarator.text.split('=')[0].trim(),
+                    container: container,
+                  };
+                  symbols.push(newSymbol);
+                }
+              }
+            }
+          }
+        }
+      } else if (n.type === 'export_statement') {
+        // Handle: export { foo, bar }
+        const exportClause = n.childForFieldName('declaration');
+        if (exportClause?.type === 'export_clause') {
+          for (let i = 0; i < exportClause.namedChildCount; i++) {
+            const specifier = exportClause.namedChild(i);
+            if (specifier?.type === 'export_specifier') {
+              const nameNode = specifier.childForFieldName('name');
+              if (nameNode) {
+                const newSymbol: SymbolInfo = {
+                  name: nameNode.text,
+                  kind: 'export',
+                  startLine: specifier.startPosition.row + 1,
+                  endLine: specifier.endPosition.row + 1,
+                  signature: `export { ${nameNode.text} }`,
+                  container: container,
+                };
+                symbols.push(newSymbol);
+              }
+            }
+          }
+        }
       }
 
       for (let i = 0; i < n.childCount; i++) traverse(n.child(i)!, currentContainer);
