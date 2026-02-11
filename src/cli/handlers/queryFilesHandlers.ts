@@ -1,83 +1,53 @@
 import path from 'path';
-import fs from 'fs-extra';
 import { inferWorkspaceRoot, resolveGitRoot } from '../../core/git';
 import { defaultDbDir, openTablesByLang, type IndexLang } from '../../core/lancedb';
-import { queryManifestWorkspace } from '../../core/workspace';
 import { inferSymbolSearchMode, type SymbolSearchMode } from '../../core/symbolSearch';
 import { createLogger } from '../../core/log';
-import { resolveLangs } from '../../core/indexCheck';
-import { generateRepoMap, type FileRank } from '../../core/repoMap';
 import type { CLIResult, CLIError } from '../types';
 import { success, error } from '../types';
 import { resolveRepoContext, validateIndex, resolveLanguages, type RepoContext } from '../helpers';
 import type { SearchFilesInput } from '../schemas/queryFilesSchemas';
-
-function isCLIError(value: unknown): value is CLIError {
-  return typeof value === 'object' && value !== null && 'ok' in value && (value as any).ok === false;
-}
-
-async function buildRepoMapAttachment(
-  repoRoot: string,
-  options: { wiki: string; repoMapFiles: number; repoMapSymbols: number }
-): Promise<{ enabled: boolean; wikiDir: string; files: FileRank[] } | { enabled: boolean; skippedReason: string }> {
-  try {
-    const wikiDir = resolveWikiDir(repoRoot, options.wiki);
-    const files = await generateRepoMap({
-      repoRoot,
-      maxFiles: options.repoMapFiles,
-      maxSymbolsPerFile: options.repoMapSymbols,
-      wikiDir,
-    });
-    return { enabled: true, wikiDir, files };
-  } catch (e: any) {
-    return { enabled: false, skippedReason: String(e?.message ?? e) };
-  }
-}
-
-function resolveWikiDir(repoRoot: string, wikiOpt: string): string {
-  const w = String(wikiOpt ?? '').trim();
-  if (w) return path.resolve(repoRoot, w);
-  const candidates = [path.join(repoRoot, 'docs', 'wiki'), path.join(repoRoot, 'wiki')];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return '';
-}
-
-function inferLangFromFile(file: string): IndexLang {
-  const f = String(file);
-  if (f.endsWith('.md') || f.endsWith('.mdx')) return 'markdown';
-  if (f.endsWith('.yml') || f.endsWith('.yaml')) return 'yaml';
-  if (f.endsWith('.java')) return 'java';
-  if (f.endsWith('.c') || f.endsWith('.h')) return 'c';
-  if (f.endsWith('.go')) return 'go';
-  if (f.endsWith('.py')) return 'python';
-  if (f.endsWith('.rs')) return 'rust';
-  return 'ts';
-}
-
-function filterWorkspaceRowsByLang(rows: any[], langSel: string): any[] {
-  const sel = String(langSel ?? 'auto');
-  if (sel === 'auto' || sel === 'all') return rows;
-  const target = sel as IndexLang;
-  return rows.filter(r => inferLangFromFile(String((r as any).file ?? '')) === target);
-}
+import {
+  isCLIError,
+  buildRepoMapAttachment,
+  filterWorkspaceRowsByLang,
+} from './sharedHelpers';
 
 function escapeQuotes(s: string): string {
   return s.replace(/'/g, "''");
 }
 
+/**
+ * Convert a glob pattern to a SQL LIKE pattern.
+ * Escapes SQL LIKE wildcards (% and _), then converts glob * to % and ? to _.
+ */
+function globToSqlLike(pattern: string): string {
+  let like = pattern.replace(/\\/g, '\\\\').replace(/([%_])/g, '\\$1');
+  like = like.replace(/\*/g, '%').replace(/\?/g, '_');
+  return like;
+}
+
 function buildFileWhere(pattern: string, mode: SymbolSearchMode, caseInsensitive: boolean): string | null {
-  const safe = escapeQuotes(pattern);
-  if (!safe) return null;
+  if (!pattern) return null;
   const likeOp = caseInsensitive ? 'ILIKE' : 'LIKE';
 
   if (mode === 'prefix') {
+    const safe = escapeQuotes(pattern);
+    if (!safe) return null;
     return `file ${likeOp} '${safe}%'`;
   }
 
-  if (mode === 'substring' || mode === 'wildcard') {
+  if (mode === 'substring') {
+    const safe = escapeQuotes(pattern);
+    if (!safe) return null;
     return `file ${likeOp} '%${safe}%'`;
+  }
+
+  if (mode === 'wildcard') {
+    const likePattern = globToSqlLike(pattern);
+    const safeLike = escapeQuotes(likePattern);
+    if (!safeLike) return null;
+    return `file ${likeOp} '${safeLike}'`;
   }
 
   // For regex and fuzzy, we'll handle them in memory after fetching
@@ -190,36 +160,28 @@ export async function handleSearchFiles(input: SearchFilesInput): Promise<CLIRes
   const repoRoot = await resolveGitRoot(path.resolve(input.path));
   const mode = inferSymbolSearchMode(input.pattern, input.mode);
 
+  // Workspace mode is not supported for query-files because
+  // queryManifestWorkspace queries by symbol, not by file name.
   if (inferWorkspaceRoot(repoRoot)) {
-    const res = await queryManifestWorkspace({
-      manifestRepoRoot: repoRoot,
-      keyword: input.pattern,
-      limit: input.maxCandidates,
-    });
-    const filteredByLang = filterWorkspaceRowsByLang(res.rows, input.lang);
-    const rows = filterAndRankFileRows(
-      filteredByLang,
-      input.pattern,
-      mode,
-      input.caseInsensitive,
-      input.limit
-    );
+    const durationMs = Date.now() - startedAt;
     log.info('query_files', {
-      ok: true,
+      ok: false,
       repoRoot,
       workspace: true,
       mode,
       case_insensitive: input.caseInsensitive,
       limit: input.limit,
       max_candidates: input.maxCandidates,
-      candidates: res.rows.length,
-      rows: rows.length,
-      duration_ms: Date.now() - startedAt,
+      candidates: 0,
+      rows: 0,
+      duration_ms: durationMs,
+      error: 'workspace_mode_not_supported_for_query_files',
     });
-    const repoMap = input.withRepoMap
-      ? { enabled: false, skippedReason: 'workspace_mode_not_supported' }
-      : undefined;
-    return success({ ...res, rows, ...(repoMap ? { repo_map: repoMap } : {}) });
+    return error('workspace_mode_not_supported_for_query_files', {
+      message:
+        'query-files does not currently support workspace manifests. ' +
+        'Please run this command from a non-workspace repository root or disable workspace mode.',
+    });
   }
 
   const ctxOrError = await resolveRepoContext(input.path);
@@ -256,7 +218,6 @@ export async function handleSearchFiles(input: SearchFilesInput): Promise<CLIRes
       const t = byLang[lang as IndexLang];
       if (!t) continue;
 
-      // Fetch candidates based on mode
       // For regex/fuzzy, we fetch all and filter in memory
       const shouldFetchAll = mode === 'regex' || mode === 'fuzzy';
       const rows = shouldFetchAll

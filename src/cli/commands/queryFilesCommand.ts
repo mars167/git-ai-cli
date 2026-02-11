@@ -15,5 +15,16 @@ export const queryFilesCommand = new Command('query-files')
   .option('--repo-map-symbols <n>', 'Max repo map symbols per file', '5')
   .option('--wiki <dir>', 'Wiki directory (default: docs/wiki or wiki)', '')
   .action(async (pattern, options) => {
-    await executeHandler('query-files', { pattern, ...options });
+    const limit = parseInt(options.limit, 10);
+    const maxCandidates = parseInt(options.maxCandidates, 10);
+    const repoMapFiles = parseInt(options.repoMapFiles, 10);
+    const repoMapSymbols = parseInt(options.repoMapSymbols, 10);
+    await executeHandler('query-files', {
+      pattern,
+      ...options,
+      limit,
+      maxCandidates,
+      repoMapFiles,
+      repoMapSymbols,
+    });
   });

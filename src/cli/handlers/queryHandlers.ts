@@ -1,66 +1,17 @@
 import path from 'path';
-import fs from 'fs-extra';
 import { inferWorkspaceRoot, resolveGitRoot } from '../../core/git';
 import { defaultDbDir, openTablesByLang, type IndexLang } from '../../core/lancedb';
 import { queryManifestWorkspace } from '../../core/workspace';
 import { buildCoarseWhere, filterAndRankSymbolRows, inferSymbolSearchMode, pickCoarseToken, type SymbolSearchMode } from '../../core/symbolSearch';
 import { createLogger } from '../../core/log';
-import { checkIndex, resolveLangs } from '../../core/indexCheck';
-import { generateRepoMap, type FileRank } from '../../core/repoMap';
 import type { CLIResult, CLIError } from '../types';
 import { success, error } from '../types';
 import { resolveRepoContext, validateIndex, resolveLanguages, type RepoContext } from '../helpers';
-
-function isCLIError(value: unknown): value is CLIError {
-  return typeof value === 'object' && value !== null && 'ok' in value && (value as any).ok === false;
-}
-
-async function buildRepoMapAttachment(
-  repoRoot: string,
-  options: { wiki: string; repoMapFiles: number; repoMapSymbols: number }
-): Promise<{ enabled: boolean; wikiDir: string; files: FileRank[] } | { enabled: boolean; skippedReason: string }> {
-  try {
-    const wikiDir = resolveWikiDir(repoRoot, options.wiki);
-    const files = await generateRepoMap({
-      repoRoot,
-      maxFiles: options.repoMapFiles,
-      maxSymbolsPerFile: options.repoMapSymbols,
-      wikiDir,
-    });
-    return { enabled: true, wikiDir, files };
-  } catch (e: any) {
-    return { enabled: false, skippedReason: String(e?.message ?? e) };
-  }
-}
-
-function resolveWikiDir(repoRoot: string, wikiOpt: string): string {
-  const w = String(wikiOpt ?? '').trim();
-  if (w) return path.resolve(repoRoot, w);
-  const candidates = [path.join(repoRoot, 'docs', 'wiki'), path.join(repoRoot, 'wiki')];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return '';
-}
-
-function inferLangFromFile(file: string): IndexLang {
-  const f = String(file);
-  if (f.endsWith('.md') || f.endsWith('.mdx')) return 'markdown';
-  if (f.endsWith('.yml') || f.endsWith('.yaml')) return 'yaml';
-  if (f.endsWith('.java')) return 'java';
-  if (f.endsWith('.c') || f.endsWith('.h')) return 'c';
-  if (f.endsWith('.go')) return 'go';
-  if (f.endsWith('.py')) return 'python';
-  if (f.endsWith('.rs')) return 'rust';
-  return 'ts';
-}
-
-function filterWorkspaceRowsByLang(rows: any[], langSel: string): any[] {
-  const sel = String(langSel ?? 'auto');
-  if (sel === 'auto' || sel === 'all') return rows;
-  const target = sel as IndexLang;
-  return rows.filter(r => inferLangFromFile(String((r as any).file ?? '')) === target);
-}
+import {
+  isCLIError,
+  buildRepoMapAttachment,
+  filterWorkspaceRowsByLang,
+} from './sharedHelpers';
 
 export async function handleSearchSymbols(input: {
   keyword: string;
