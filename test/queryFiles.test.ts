@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 // @ts-ignore dist module has no typings
 import { handleSearchFiles } from '../dist/src/cli/handlers/queryFilesHandlers.js';
+// @ts-ignore dist module has no typings
+import { SearchFilesSchema } from '../dist/src/cli/schemas/queryFilesSchemas.js';
 
 const testPath = '.';
 
@@ -89,6 +91,14 @@ test('query-files: language filtering works', async () => {
 
   assert(result.ok, 'Query should succeed');
   assert(Array.isArray(result.rows), 'Result should contain rows array');
+  // Verify all returned rows are from ts-related files
+  assert(
+    result.rows.every((row: any) => {
+      const file = String(row.file ?? '');
+      return file.endsWith('.ts') || file.endsWith('.tsx') || file.endsWith('.js') || file.endsWith('.jsx');
+    }),
+    'All results should be TypeScript/JavaScript files when lang=ts',
+  );
 });
 
 test('query-files: limit parameter respected', async () => {
@@ -115,7 +125,7 @@ test('query-files: limit parameter respected', async () => {
 
 test('query-files: wildcard search with asterisk', async () => {
   const result = await handleSearchFiles({
-    pattern: 'src/*/handlers',
+    pattern: 'src/*/handlers*',
     path: testPath,
     limit: 50,
     mode: 'wildcard',
@@ -129,6 +139,16 @@ test('query-files: wildcard search with asterisk', async () => {
   });
 
   assert(result.ok, 'Query should succeed');
+  assert(Array.isArray(result.rows), 'Result should contain rows array');
+  assert(result.rows.length > 0, 'Should find at least one file matching wildcard pattern');
+  assert(
+    result.rows.every((row: any) => {
+      const file = String(row.file ?? '');
+      // Verify the file matches the glob pattern: src/*/handlers*
+      return /^src\/[^/]+\/handlers/.test(file);
+    }),
+    'All results should match the wildcard pattern src/*/handlers*',
+  );
 });
 
 test('query-files: fuzzy search finds partial matches', async () => {
@@ -173,40 +193,41 @@ test('query-files: regex search with pattern', async () => {
   );
 });
 
-test('query-files: empty pattern returns error', async () => {
-  const result = await handleSearchFiles({
-    pattern: '',
-    path: testPath,
-    limit: 50,
-    mode: 'substring',
-    caseInsensitive: false,
-    maxCandidates: 1000,
-    lang: 'ts',
-    withRepoMap: false,
-    repoMapFiles: 20,
-    repoMapSymbols: 5,
-    wiki: '',
-  });
+test('query-files: empty pattern rejected by schema validation', () => {
+  assert.throws(
+    () => SearchFilesSchema.parse({
+      pattern: '',
+      path: testPath,
+      limit: 50,
+      mode: 'substring',
+      caseInsensitive: false,
+      maxCandidates: 1000,
+      lang: 'ts',
+      withRepoMap: false,
+      repoMapFiles: 20,
+      repoMapSymbols: 5,
+      wiki: '',
+    }),
+    'Empty pattern should be rejected by Zod schema validation',
+  );
 });
 
-test('query-files: invalid mode handled gracefully', async () => {
-  const result = await handleSearchFiles({
-    pattern: 'test',
-    path: testPath,
-    limit: 50,
-    mode: 'invalid' as any,
-    caseInsensitive: false,
-    maxCandidates: 1000,
-    lang: 'ts',
-    withRepoMap: false,
-    repoMapFiles: 20,
-    repoMapSymbols: 5,
-    wiki: '',
-  });
-
-  assert(
-    !result.ok || result.rows.length >= 0,
-    'Should either fail or return empty array',
+test('query-files: invalid mode rejected by schema validation', () => {
+  assert.throws(
+    () => SearchFilesSchema.parse({
+      pattern: 'test',
+      path: testPath,
+      limit: 50,
+      mode: 'invalid',
+      caseInsensitive: false,
+      maxCandidates: 1000,
+      lang: 'ts',
+      withRepoMap: false,
+      repoMapFiles: 20,
+      repoMapSymbols: 5,
+      wiki: '',
+    }),
+    'Invalid mode should be rejected by Zod schema validation',
   );
 });
 
