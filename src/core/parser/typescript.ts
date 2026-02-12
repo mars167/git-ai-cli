@@ -39,7 +39,32 @@ export class TypeScriptAdapter implements LanguageAdapter {
       if (n.type === 'call_expression') {
         const fn = n.childForFieldName('function') ?? n.namedChild(0);
         const callee = extractTsCalleeName(fn);
-        if (callee) pushRef(refs, callee, 'call', fn ?? n);
+        if (callee) {
+          pushRef(refs, callee, 'call', fn ?? n);
+          
+          // Handle test() and describe() patterns for test files
+          if (callee === 'test' || callee === 'describe') {
+            // Extract test name from first argument (usually a string)
+            const args = n.childForFieldName('arguments');
+            if (args && args.namedChildCount > 0) {
+              const firstArg = args.namedChild(0);
+              if (firstArg?.type === 'string' || firstArg?.type === 'template_string') {
+                const testName = firstArg.text.replace(/^['"`]|['"`]$/g, '').trim();
+                if (testName) {
+                  const testSym: SymbolInfo = {
+                    name: testName,
+                    kind: 'test',
+                    startLine: n.startPosition.row + 1,
+                    endLine: n.endPosition.row + 1,
+                    signature: `${callee}("${testName}", ...)`,
+                    container: container,
+                  };
+                  symbols.push(testSym);
+                }
+              }
+            }
+          }
+        }
       } else if (n.type === 'new_expression') {
         const ctor = n.childForFieldName('constructor') ?? n.namedChild(0);
         const callee = extractTsCalleeName(ctor);
@@ -145,6 +170,38 @@ export class TypeScriptAdapter implements LanguageAdapter {
               }
             }
           }
+        }
+      } else if (n.type === 'type_alias_declaration') {
+        // Handle: type MyType = string | number;
+        const nameNode = n.childForFieldName('name');
+        if (nameNode) {
+          const typeSym: SymbolInfo = {
+            name: nameNode.text,
+            kind: 'type',
+            startLine: n.startPosition.row + 1,
+            endLine: n.endPosition.row + 1,
+            signature: `type ${nameNode.text} = ...`,
+            container: container,
+          };
+          symbols.push(typeSym);
+        }
+      } else if (n.type === 'interface_declaration') {
+        // Handle: interface MyInterface { ... }
+        const nameNode = n.childForFieldName('name');
+        if (nameNode) {
+          const head = n.text.split('{')[0].trim();
+          const heritage = parseHeritage(head);
+          const interfaceSym: SymbolInfo = {
+            name: nameNode.text,
+            kind: 'interface',
+            startLine: n.startPosition.row + 1,
+            endLine: n.endPosition.row + 1,
+            signature: `interface ${nameNode.text}`,
+            container: container,
+            extends: heritage.extends,
+            implements: heritage.implements,
+          };
+          symbols.push(interfaceSym);
         }
       }
 
