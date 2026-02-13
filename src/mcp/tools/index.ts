@@ -12,7 +12,6 @@ import {
 } from './fileTools';
 import {
   searchSymbolsDefinition,
-  semanticSearchDefinition,
   repoMapDefinition
 } from './searchTools';
 import {
@@ -37,9 +36,8 @@ export const allTools: ToolDefinition[] = [
   listFilesDefinition,
   readFileDefinition,
 
-  // Search tools (3)
+  // Search tools (2)
   searchSymbolsDefinition,
-  semanticSearchDefinition,
   repoMapDefinition,
 
   // AST graph tools (7)

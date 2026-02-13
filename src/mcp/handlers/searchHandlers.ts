@@ -2,12 +2,10 @@ import type { ToolHandler } from '../types';
 import { successResponse, errorResponse } from '../types';
 import type {
   SearchSymbolsArgs,
-  SemanticSearchArgs,
   RepoMapArgs
 } from '../schemas';
 import { resolveGitRoot, inferScanRoot, inferWorkspaceRoot } from '../../core/git';
 import { defaultDbDir, openTablesByLang } from '../../core/lancedb';
-import { buildQueryVector, scoreAgainst } from '../../core/search';
 import { checkIndex, resolveLangs } from '../../core/indexCheck';
 import { generateRepoMap } from '../../core/repoMap';
 import { buildCoarseWhere, filterAndRankSymbolRows, inferSymbolSearchMode, pickCoarseToken } from '../../core/symbolSearch';
@@ -253,69 +251,4 @@ export const handleSearchSymbols: ToolHandler<SearchSymbolsArgs> = async (args) 
   });
 };
 
-export const handleSemanticSearch: ToolHandler<SemanticSearchArgs> = async (args) => {
-  const repoRoot = await resolveGitRoot(path.resolve(args.path));
-  const query = args.query;
-  const topk = args.topk ?? 10;
-  const langSel = args.lang ?? 'auto';
-  const withRepoMap = args.with_repo_map ?? false;
-  const wikiDir = resolveWikiDirInsideRepo(repoRoot, args.wiki_dir ?? '');
-  const repoMapMaxFiles = args.repo_map_max_files ?? 20;
-  const repoMapMaxSymbols = args.repo_map_max_symbols ?? 5;
-
-  const status = await checkIndex(repoRoot);
-  if (!status.ok) {
-    return errorResponse(
-      new Error('Index incompatible or missing'),
-      'index_incompatible'
-    );
-  }
-
-  const langs = resolveLangs(status.found.meta ?? null, langSel as any);
-  const dim = typeof status.found.meta?.dim === 'number' ? status.found.meta.dim : 256;
-  const dbDir = defaultDbDir(repoRoot);
-  const { byLang } = await openTablesByLang({
-    dbDir,
-    dim,
-    mode: 'open_only',
-    languages: langs
-  });
-  const q = buildQueryVector(query, dim);
-
-  const allScored: any[] = [];
-  for (const lang of langs) {
-    const t = byLang[lang];
-    if (!t) continue;
-    const chunkRows = await t.chunks
-      .query()
-      .select(['content_hash', 'text', 'dim', 'scale', 'qvec_b64'])
-      .limit(1_000_000)
-      .toArray();
-    for (const r of chunkRows as any[]) {
-      allScored.push({
-        lang,
-        content_hash: String(r.content_hash),
-        score: scoreAgainst(q, {
-          dim: Number(r.dim),
-          scale: Number(r.scale),
-          qvec: new Int8Array(Buffer.from(String(r.qvec_b64), 'base64'))
-        }),
-        text: String(r.text)
-      });
-    }
-  }
-
-  const rows = allScored
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topk);
-  const repoMap = withRepoMap
-    ? await buildRepoMapAttachment(repoRoot, wikiDir, repoMapMaxFiles, repoMapMaxSymbols)
-    : undefined;
-
-  return successResponse({
-    repoRoot,
-    lang: langSel,
-    rows,
-    ...(repoMap ? { repo_map: repoMap } : {})
-  });
-};
+ 

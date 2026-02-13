@@ -17,11 +17,9 @@ import {
   handleGraphCallees,
   handleGraphChain,
 } from './handlers/graphHandlers';
-import { SemanticSearchSchema } from './schemas/semanticSchemas';
 import { IndexRepoSchema } from './schemas/indexSchemas';
 import { SearchSymbolsSchema } from './schemas/querySchemas';
 import { SearchFilesSchema } from './schemas/queryFilesSchemas';
-import { handleSemanticSearch } from './handlers/semanticHandlers';
 import { handleIndexRepo } from './handlers/indexHandlers';
 import { handleSearchSymbols } from './handlers/queryHandlers';
 import { handleSearchFiles } from './handlers/queryFilesHandlers';
@@ -42,17 +40,13 @@ import { handleRepoMap } from './handlers/repoMapHandler';
  * Maps command keys to their schema + handler implementations.
  *
  * Command keys follow the pattern:
- * - Top-level commands: 'index', 'semantic', 'status'
- * - Subcommands: 'graph:find', 'graph:query', 'dsr:generate'
+ * - Top-level commands: 'index', 'status'
+ * - Subcommands: 'graph:find', 'graph:query'
  *
  * This will be populated as commands are migrated from src/commands/*.ts
  */
 export const cliHandlers: Record<string, HandlerRegistration<any>> = {
   // Top-level commands
-  'semantic': {
-    schema: SemanticSearchSchema,
-    handler: handleSemanticSearch,
-  },
   'index': {
     schema: IndexRepoSchema,
     handler: handleIndexRepo,
