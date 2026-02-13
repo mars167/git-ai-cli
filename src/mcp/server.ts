@@ -90,7 +90,6 @@ export class GitAIV2MCPServer {
       list_files: schemas.ListFilesArgsSchema,
       read_file: schemas.ReadFileArgsSchema,
       search_symbols: schemas.SearchSymbolsArgsSchema,
-      semantic_search: schemas.SemanticSearchArgsSchema,
       repo_map: schemas.RepoMapArgsSchema,
       ast_graph_query: schemas.AstGraphQueryArgsSchema,
       ast_graph_find: schemas.AstGraphFindArgsSchema,

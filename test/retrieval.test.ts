@@ -15,9 +15,6 @@ import { fuseResults } from '../dist/src/core/retrieval/fuser.js';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore dist module has no typings
 import { rerank } from '../dist/src/core/retrieval/reranker.js';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore dist module has no typings
-import { runAdaptiveRetrieval } from '../dist/src/core/search.js';
 import type { QueryType, RetrievalResult } from '../src/core/retrieval/types';
 
 test('classifyQuery identifies historical intent', () => {
@@ -64,15 +61,4 @@ test('rerank boosts lexical overlap', () => {
   ];
   const ranked = rerank('auth', candidates, { query: 'auth', limit: 2 });
   assert.equal(ranked[0]?.id, 'a');
-});
-
-test('runAdaptiveRetrieval produces fused and reranked results', () => {
-  const candidates: RetrievalResult[] = [
-    { source: 'vector', id: 'vec', score: 0.8, text: 'semantic auth flow' },
-    { source: 'graph', id: 'graph', score: 0.7, text: 'callers of auth' },
-  ];
-  const out = runAdaptiveRetrieval('auth flow', candidates, { limit: 2 });
-  assert.equal(out.query, 'auth flow');
-  assert.ok(out.weights.vectorWeight > 0);
-  assert.equal(out.results.length, 2);
 });

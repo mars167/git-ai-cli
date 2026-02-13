@@ -1,7 +1,6 @@
 import type { ToolDefinition } from '../types';
 import {
   handleSearchSymbols,
-  handleSemanticSearch,
   handleRepoMap
 } from '../handlers';
 
@@ -26,26 +25,6 @@ export const searchSymbolsDefinition: ToolDefinition = {
     required: ['path', 'query']
   },
   handler: handleSearchSymbols
-};
-
-export const semanticSearchDefinition: ToolDefinition = {
-  name: 'semantic_search',
-  description: 'Semantic search using SQ8 vectors stored in LanceDB (brute-force). Risk: low (read-only).',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      query: { type: 'string' },
-      path: { type: 'string', description: 'Repository root path' },
-      topk: { type: 'number', default: 10 },
-      lang: { type: 'string', enum: ['auto', 'all', 'java', 'ts'], default: 'auto' },
-      with_repo_map: { type: 'boolean', default: false },
-      repo_map_max_files: { type: 'number', default: 20 },
-      repo_map_max_symbols: { type: 'number', default: 5 },
-      wiki_dir: { type: 'string', description: 'Wiki dir relative to repo root (optional)' }
-    },
-    required: ['path', 'query']
-  },
-  handler: handleSemanticSearch
 };
 
 export const repoMapDefinition: ToolDefinition = {

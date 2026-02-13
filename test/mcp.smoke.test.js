@@ -80,7 +80,7 @@ test('mcp server supports atomic tool calls via path arg', async () => {
     const toolNames = new Set((res.tools ?? []).map(t => t.name));
 
     assert.ok(toolNames.has('search_symbols'));
-    assert.ok(toolNames.has('semantic_search'));
+    assert.ok(!toolNames.has('semantic_search'), 'semantic_search should not be registered');
     assert.ok(toolNames.has('repo_map'));
     assert.ok(toolNames.has('get_repo'));
     assert.ok(toolNames.has('check_index'));
@@ -148,14 +148,6 @@ test('mcp server supports atomic tool calls via path arg', async () => {
       assert.ok(parsed && parsed.repo_map && parsed.repo_map.enabled === true);
       assert.ok(Array.isArray(parsed.repo_map.files));
       assert.ok(parsed.repo_map.files.length > 0);
-    }
-
-    {
-      const call = await client.callTool({ name: 'semantic_search', arguments: { path: repoDir, query: 'hello world', topk: 3 } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && Array.isArray(parsed.rows));
-      assert.ok(parsed.rows.length > 0);
     }
 
     {

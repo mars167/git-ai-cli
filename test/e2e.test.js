@@ -157,22 +157,6 @@ test('git-ai works in Spring Boot and Vue repos', async () => {
   }
 
   {
-    const res = runOk('node', [CLI, 'ai', 'semantic', 'hello controller', '--topk', '5'], springRepo);
-    const obj = JSON.parse(res.stdout);
-    assert.ok(Array.isArray(obj.hits));
-    assert.ok(obj.hits.length > 0);
-  }
-
-  {
-    const res = runOk('node', [CLI, 'ai', 'semantic', 'hello controller', '--topk', '5', '--with-repo-map', '--repo-map-files', '5', '--repo-map-symbols', '2'], springRepo);
-    const obj = JSON.parse(res.stdout);
-    assert.ok(Array.isArray(obj.hits));
-    assert.ok(obj.repo_map && obj.repo_map.enabled === true);
-    assert.ok(Array.isArray(obj.repo_map.files));
-    assert.ok(obj.repo_map.files.length > 0);
-  }
-
-  {
     const res = runOk('node', [CLI, 'ai', 'graph', 'find', 'HelloController'], springRepo);
     const obj = JSON.parse(res.stdout);
     assert.ok(Array.isArray(obj.result?.rows));
