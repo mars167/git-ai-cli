@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsc",
     "start": "ts-node bin/git-ai.ts",
-    "test": "npm run build && node dist/bin/git-ai.js ai index --overwrite && node --test test/*.test.mjs test/*.test.ts",
+    "test": "npm run build && node dist/bin/git-ai.js ai index --overwrite && node --test test/*.test.mjs test/*.test.ts test/*.test.js",
+    "test:cli": "npm run build && node --test test/cliCommands.test.js",
     "test:parser": "ts-node test/verify_parsing.ts"
   },
   "files": [
