@@ -10,7 +10,6 @@ import type { SearchFilesInput } from '../schemas/queryFilesSchemas';
 import {
   isCLIError,
   buildRepoMapAttachment,
-  filterWorkspaceRowsByLang,
 } from './sharedHelpers';
 
 function escapeQuotes(s: string): string {
