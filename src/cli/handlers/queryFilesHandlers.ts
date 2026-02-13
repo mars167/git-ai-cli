@@ -10,7 +10,6 @@ import type { SearchFilesInput } from '../schemas/queryFilesSchemas';
 import {
   isCLIError,
   buildRepoMapAttachment,
-  filterWorkspaceRowsByLang,
 } from './sharedHelpers';
 
 function escapeQuotes(s: string): string {
@@ -249,11 +248,18 @@ export async function handleSearchFiles(input: SearchFilesInput): Promise<CLIRes
 
     const repoMap = input.withRepoMap ? await buildRepoMapAttachment(ctx.repoRoot, input) : undefined;
 
+    const files = rows.map(r => ({
+      path: String(r.file || ''),
+      symbol: String(r.symbol || ''),
+      kind: String(r.kind || ''),
+      lang: String(r.lang || ''),
+    }));
+
     return success({
       repoRoot: ctx.repoRoot,
-      count: rows.length,
+      count: files.length,
       lang: input.lang,
-      rows,
+      files,
       ...(repoMap ? { repo_map: repoMap } : {}),
     });
   } catch (e) {
