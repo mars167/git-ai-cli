@@ -1,18 +1,18 @@
 {
-  "name": "@mars167/git-ai",
+  "name": "code-context-engine",
   "version": "2.4.3",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "bin": {
-    "git-ai": "dist/bin/git-ai.js"
+    "code-context-engine": "dist/bin/code-context-engine.js"
   },
   "directories": {
     "doc": "docs"
   },
   "scripts": {
     "build": "tsc",
-    "start": "ts-node bin/git-ai.ts",
-    "test": "npm run build && node dist/bin/git-ai.js ai index --overwrite && node --test test/*.test.mjs test/*.test.ts test/*.test.js",
-    "test:cli": "bash test-cli.sh",
+    "start": "ts-node bin/code-context-engine.ts",
+    "test": "npm run build && node --test test/runtime.search.test.ts test/runtime.tasks.test.ts test/runtime.navigation.test.ts test/diffReviewContext.test.ts test/agentBundle.test.ts test/mcp.smoke.test.js",
+    "test:cli": "npm run build && node --test test/cliCommands.test.js",
     "test:parser": "ts-node test/verify_parsing.ts"
   },
   "files": [
@@ -27,6 +27,8 @@
   "keywords": [
     "git",
     "ai",
+    "code-context-engine",
+    "agent-runtime",
     "semantic-search",
     "mcp",
     "code-search",
@@ -39,7 +41,7 @@
   ],
   "author": "mars167",
   "license": "MIT",
-  "description": "A git-compatible CLI with AI indexing/search and an MCP server.",
+  "description": "Code Context Engine: a local runtime and thin adapter surface for agent-oriented code retrieval and context construction.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mars167/git-ai-cli.git"

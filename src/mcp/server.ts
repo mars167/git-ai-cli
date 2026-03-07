@@ -14,24 +14,24 @@ import { ToolRegistry } from './registry';
 import { allTools } from './tools';
 import * as schemas from './schemas';
 
-export interface GitAIV2MCPServerOptions {
+export interface CodeContextEngineMCPServerOptions {
   disableAccessLog?: boolean;
   transport?: 'stdio' | 'http';
   port?: number;
   stateless?: boolean;
 }
 
-export class GitAIV2MCPServer {
+export class CodeContextEngineMCPServer {
   private server: Server;
   private startDir: string;
-  private options: GitAIV2MCPServerOptions;
+  private options: CodeContextEngineMCPServerOptions;
   private registry: ToolRegistry;
 
-  constructor(startDir: string, options: GitAIV2MCPServerOptions = {}) {
+  constructor(startDir: string, options: CodeContextEngineMCPServerOptions = {}) {
     this.startDir = path.resolve(startDir);
     this.options = options;
     this.server = new Server(
-      { name: 'git-ai-v2', version: '2.0.0' },
+      { name: 'code-context-engine', version: '2.0.0' },
       { capabilities: { tools: {} } }
     );
     this.registry = new ToolRegistry();
@@ -82,23 +82,16 @@ export class GitAIV2MCPServer {
 
   private setupHandlers() {
     const schemaMap: Record<string, any> = {
-      get_repo: schemas.GetRepoArgsSchema,
       check_index: schemas.CheckIndexArgsSchema,
       rebuild_index: schemas.RebuildIndexArgsSchema,
-      pack_index: schemas.PackIndexArgsSchema,
-      unpack_index: schemas.UnpackIndexArgsSchema,
-      list_files: schemas.ListFilesArgsSchema,
       read_file: schemas.ReadFileArgsSchema,
-      search_symbols: schemas.SearchSymbolsArgsSchema,
-      semantic_search: schemas.SemanticSearchArgsSchema,
       repo_map: schemas.RepoMapArgsSchema,
-      ast_graph_query: schemas.AstGraphQueryArgsSchema,
-      ast_graph_find: schemas.AstGraphFindArgsSchema,
-      ast_graph_children: schemas.AstGraphChildrenArgsSchema,
-      ast_graph_refs: schemas.AstGraphRefsArgsSchema,
-      ast_graph_callers: schemas.AstGraphCallersArgsSchema,
-      ast_graph_callees: schemas.AstGraphCalleesArgsSchema,
-      ast_graph_chain: schemas.AstGraphChainArgsSchema,
+      lexical_search: schemas.LexicalSearchArgsSchema,
+      implementation_context: schemas.ImplementationContextArgsSchema,
+      find_tests: schemas.FindTestsArgsSchema,
+      find_impact: schemas.FindImpactArgsSchema,
+      find_extension_points: schemas.FindExtensionPointsArgsSchema,
+      review_context_for_diff: schemas.ReviewContextForDiffArgsSchema,
     };
 
     for (const tool of allTools) {
@@ -198,7 +191,7 @@ export class GitAIV2MCPServer {
             sessionIdGenerator: undefined,
           });
           const serverInstance = new Server(
-            { name: 'git-ai-v2', version: '2.0.0' },
+            { name: 'code-context-engine', version: '2.0.0' },
             { capabilities: { tools: {} } }
           );
           this.attachServerHandlers(serverInstance);
@@ -225,7 +218,7 @@ export class GitAIV2MCPServer {
           });
           
           const serverInstance = new Server(
-            { name: 'git-ai-v2', version: '2.0.0' },
+            { name: 'code-context-engine', version: '2.0.0' },
             { capabilities: { tools: {} } }
           );
           this.attachServerHandlers(serverInstance);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { Command } from 'commander';
 import { spawnSync } from 'child_process';
+import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
 import { aiCommand } from '../src/commands/ai';
@@ -50,8 +50,8 @@ function main() {
   const program = new Command();
   const version = readVersionFromPackageJson();
   program
-    .name('git-ai')
-    .description('git-ai: git-compatible CLI with AI indexing tools')
+    .name('code-context-engine')
+    .description('Code Context Engine: local runtime and thin adapters for agent-oriented code retrieval')
     .version(version);
 
   program.addCommand(aiCommand);

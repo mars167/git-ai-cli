@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs-extra';
 import { resolveGitRoot } from '../../core/git';
-import { GitAIV2MCPServer } from '../../mcp/server';
+import { CodeContextEngineMCPServer } from '../../mcp/server';
 import { createLogger } from '../../core/log';
 import type { CLIResult, CLIError } from '../types';
 import { success, error } from '../types';
@@ -20,7 +20,7 @@ export async function handleServe(input: {
     stateless: input.http ? input.stateless : undefined,
   });
 
-  const server = new GitAIV2MCPServer(process.cwd(), {
+  const server = new CodeContextEngineMCPServer(process.cwd(), {
     disableAccessLog: !!input.disableMcpLog,
     transport: input.http ? 'http' : 'stdio',
     port: input.port,

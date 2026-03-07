@@ -21,11 +21,31 @@ export function buildFindSymbolsQuery(lang?: string): string {
 `;
 }
 
+export function buildDefinitionsByNameQuery(lang?: string): string {
+  return `
+?[ref_id, file, lang, name, kind, signature, start_line, end_line] :=
+  *ast_symbol{ref_id, file, lang, name, kind, signature, start_line, end_line},
+  lowercase(name) == lowercase($name)${lang ? `,
+  lowercase(lang) == lowercase($lang)` : ''}
+`;
+}
+
 export function buildChildrenQuery(): string {
   return `
 ?[child_id, file, lang, name, kind, signature, start_line, end_line] :=
   *ast_contains{parent_id: $parent_id, child_id},
   *ast_symbol{ref_id: child_id, file, lang, name, kind, signature, start_line, end_line}
+`;
+}
+
+export function buildContainingScopeQuery(lang?: string): string {
+  return `
+?[file, lang, name, kind, signature, start_line, end_line] :=
+  *ast_symbol{file, lang, name, kind, signature, start_line, end_line},
+  file == $file,
+  start_line <= $line,
+  end_line >= $line${lang ? `,
+  lowercase(lang) == lowercase($lang)` : ''}
 `;
 }
 
