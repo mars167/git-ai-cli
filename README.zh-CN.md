@@ -1,4 +1,4 @@
-# git-ai
+# Code Context Engine
 
 [![ci](https://github.com/mars167/git-ai-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/mars167/git-ai-cli/actions/workflows/ci.yml)
 [![release](https://github.com/mars167/git-ai-cli/actions/workflows/release.yml/badge.svg)](https://github.com/mars167/git-ai-cli/actions/workflows/release.yml)
@@ -13,15 +13,15 @@
 
 <div align="center">
 
-### 🚀 快速安装
+### 快速开始
 
-**AI Agent 技能安装 (Claude Code, Cursor, Windsurf 等)**
+**Agent Bundle 安装**
 
 ```bash
 npx skills add mars167/git-ai-cli/skills/git-ai-code-search
 ```
 
-**CLI 工具安装**
+**本地 Runtime / 兼容 CLI**
 
 ```bash
 npm install -g @mars167/git-ai
@@ -31,29 +31,42 @@ npm install -g @mars167/git-ai
 
 ---
 
-## 为代码库添加语义层，让 AI 从"读代码"进化到"懂代码"
+## 面向 Agent 的本地代码检索与上下文引擎
 
-**代码的语义，应该像代码本身一样版本化、可追溯**
+**Code Context Engine 让本地仓库可以直接产出 review agent 和 coding agent 可消费的结构化上下文。**
 
-git-ai 是一个本地代码理解工具，通过 DSR（确定性语义记录）和 Hyper RAG，为代码库构建可追溯的语义层，让 AI Agent 和开发者真正理解代码的演进与关系。
+Code Context Engine 是 `git-ai` 的新产品方向：一个面向 review、实现、影响面分析和代码探索任务的本地代码检索与上下文构建引擎。产品中心不再是 CLI 命令或 MCP primitive，而是本地 TypeScript runtime 与 agent bundle，它们会把 lexical 检索、symbol navigation、graph expand、semantic rerank 和 repo-level hints 组织成可直接消费的证据包。
 
-### ✨ 为什么选择 git-ai？
+### 为什么选择 Code Context Engine？
 
-- **🔗 Hyper RAG**：融合向量检索 + 图检索 + DSR，多维度语义理解
-- **📜 版本化语义**：每个提交都有语义快照，历史变更清晰可溯
-- **🔄 随时可用**：索引随代码走，checkout 即可用，无需重建
-- **🤖 AI 原生**：MCP Server 让 Claude、Trae 等 Agent 都能深度理解你的代码
-- **🔒 完全本地**：代码永不离开你的机器，安全无忧
-- **⚡ 全流程支持**：从开发到 Review 到重构，索引贯穿整个生命周期
-- **📊 极速性能**：10k 文件索引 < 30 秒，搜索响应 < 100ms
+- **Lexical First**：默认以 exact token、substring、regex、literal string、path filter、language filter 做高精度召回
+- **面向 Agent 的上下文**：直接返回 evidence bundle / context bundle，而不是零散搜索结果
+- **深度导航**：结合 symbol search、graph expansion、repo-map hints 与 semantic rerank
+- **完全本地**：代码和索引始终留在本机
+- **增量友好**：复用现有本地索引与图存储能力
+- **薄适配层**：CLI 和 MCP 只是可选适配，不再是产品核心
 
 ---
 
-## ✨ 核心能力
+## 核心能力
 
-### 1️⃣ 语义搜索
+### 1. Code Context Runtime
 
-用自然语言找到代码，无需记忆文件名或函数名：
+面向 agent 构建任务上下文：
+
+```ts
+const engine = createCodeContextEngine({ repoRoot });
+
+const result = await engine.search.lexical({
+  query: 'authenticateUser',
+  mode: 'exact',
+  pathPattern: 'src/auth/**',
+});
+```
+
+### 2. Lexical 与结构化检索
+
+用 exact token、substring、regex、literal string、path filter 与图扩展找到相关代码：
 
 ```bash
 git-ai ai semantic "用户认证逻辑"
@@ -61,7 +74,7 @@ git-ai ai semantic "数据库连接池配置"
 git-ai ai semantic "错误处理中间件"
 ```
 
-### 2️⃣ 符号关系分析
+### 3. 符号导航
 
 理解代码之间的调用关系：
 
@@ -76,19 +89,7 @@ git-ai ai graph callees authenticateUser
 git-ai ai graph chain authenticateUser --max-depth 3
 ```
 
-### 3️⃣ 变更历史追溯
-
-通过 DSR 追踪符号的历史演变：
-
-```bash
-# 查看函数的历史变更
-git-ai ai dsr query symbol-evolution authenticateUser --limit 50
-
-# 查看某个提交的完整语义快照
-git-ai ai dsr context
-```
-
-### 4️⃣ 跨语言支持
+### 4. 跨语言支持
 
 支持多种主流编程语言：
 
@@ -106,28 +107,14 @@ git-ai ai dsr context
 
 ---
 
-## 💡 设计理念
+## 设计理念
 
-git-ai 不只是一个搜索工具，而是代码库的"语义时间线"：
+Code Context Engine 采用任务优先的检索管线：
 
-### DSR（Deterministic Semantic Record）
-
-每个提交对应一份不可变的语义快照，记录当时的代码结构、符号关系、设计意图。代码的语义应该像代码本身一样版本化——可追溯、可比对、可演进。
-
-### Hyper RAG
-
-融合多种检索方式，让理解更深入：
-- **向量检索**：语义相似度匹配
-- **图检索**：调用关系、继承关系分析
-- **DSR 检索**：历史演变追溯
-
-### 去中心化语义
-
-索引随代码走，不依赖中央服务器。checkout、branch、tag 都能立即使用一致的语义索引。
-
-### Server 模式
-
-MCP Server 让任何 AI Agent 都能调用索引，实现真正的 AI 辅助开发。
+- **lexical / symbol first**：为 review 和实现类任务提供最高精度召回
+- **graph expand second**：通过 callers、callees、containment、related files 扩展上下文
+- **semantic rerank last**：向量检索负责补充召回与排序，不再是默认入口
+- **runtime first**：本地 runtime 是产品核心；CLI 和 MCP 只是可选薄适配层
 
 ---
 

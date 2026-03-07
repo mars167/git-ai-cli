@@ -5,7 +5,7 @@
 **Branch:** refactor/cli-commands-architecture
 
 ## OVERVIEW
-git-ai CLI + MCP server. TypeScript implementation for AI-powered Git operations with semantic search and graph-based code analysis. Indices stored in `.git-ai/`.
+Code Context Engine. TypeScript local runtime for agent-oriented code retrieval and context construction, with optional CLI and MCP adapters. Indices stored in `.git-ai/`.
 
 ## STRUCTURE
 ```
@@ -29,16 +29,19 @@ git-ai-cli-v2/
 ## WHERE TO LOOK
 | Task | Location |
 |------|----------|
-| CLI commands | `src/cli/commands/*.ts` (new architecture) |
-| CLI handlers | `src/cli/handlers/*.ts` (business logic) |
+| Runtime entrypoints | `src/index.ts`, `src/retrieval/runtime.ts` |
+| Domain contracts | `src/domain/*.ts` |
+| Lexical retrieval | `src/retrieval/lexical/*.ts` |
+| CLI commands | `src/cli/commands/*.ts` (legacy adapter surface) |
+| CLI handlers | `src/cli/handlers/*.ts` (legacy/transition business logic) |
 | CLI schemas | `src/cli/schemas/*.ts` (Zod validation) |
 | Handler registry | `src/cli/registry.ts` (all 20 commands) |
 | Command aggregator | `src/commands/ai.ts` (entry point) |
 | Indexing logic | `src/core/indexer.ts`, `src/core/indexerIncremental.ts` |
 | Graph queries | `src/core/cozo.ts`, `src/core/astGraph.ts` |
-| Semantic search | `src/core/semantic.ts`, `src/core/sq8.ts` |
+| Semantic search | `src/core/search.ts`, `src/core/sq8.ts` |
 | Repo map | `src/core/repoMap.ts` |
-| MCP tools | `src/mcp/`, `src/core/graph.ts` |
+| MCP tools | `src/mcp/` (optional thin adapter) |
 | Language parsers | `src/core/parser/*.ts` |
 
 ## CODE MAP
@@ -46,7 +49,7 @@ git-ai-cli-v2/
 |--------|------|----------|------|
 | `indexer` | fn | `core/indexer.ts` | Full repository indexing |
 | `incrementalIndexer` | fn | `core/indexerIncremental.ts` | Incremental updates |
-| `GitAiService` | class | `mcp/index.ts` | MCP entry point |
+| `createCodeContextEngine` | fn | `src/retrieval/runtime.ts` | Runtime entry point |
 | `cozoQuery` | fn | `core/cozo.ts` | Graph DB queries |
 | `semanticSearch` | fn | `core/semantic.ts` | Vector similarity |
 | `repoMap` | fn | `core/repoMap.ts` | PageRank-based repo overview |
@@ -57,7 +60,7 @@ git-ai-cli-v2/
 - **Imports**: Node built-ins → external deps → internal modules
 - **Formatting**: 2 spaces, single quotes, trailing commas
 - **Errors**: Structured JSON logging via `createLogger`
-- **CLI output**: JSON on stdout, logs on stderr
+- **Runtime output**: structured bundles and search matches
 - **External inputs**: Use `unknown`, narrow early
 
 ## ANTI-PATTERNS (THIS PROJECT)
@@ -84,4 +87,4 @@ node dist/bin/git-ai.js --help  # Validate packaged output
 ## NOTES
 - Indices auto-update on git operations
 - `checkIndex` gates symbol/semantic/graph queries
-- MCP server exposes git-ai tools for external IDEs
+- CLI/MCP are transition adapters, not the product core

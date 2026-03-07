@@ -2,7 +2,7 @@
   <img src="docs/logo.png" alt="git-ai logo" width="200"/>
 </p>
 
-# git-ai
+# Code Context Engine
 
 [![ci](https://github.com/mars167/git-ai-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/mars167/git-ai-cli/actions/workflows/ci.yml)
 [![release](https://github.com/mars167/git-ai-cli/actions/workflows/release.yml/badge.svg)](https://github.com/mars167/git-ai-cli/actions/workflows/release.yml)
@@ -17,15 +17,15 @@
 
 <div align="center">
 
-### 🚀 Quick Install
+### Quick Start
 
-**For AI Agents (Claude Code, Cursor, Windsurf, etc.)**
+**For Agent Bundles**
 
 ```bash
 npx skills add mars167/git-ai-cli/skills/git-ai-code-search
 ```
 
-**For CLI Usage**
+**For Local Runtime / Legacy CLI**
 
 ```bash
 npm install -g @mars167/git-ai
@@ -35,29 +35,42 @@ npm install -g @mars167/git-ai
 
 ---
 
-## Adding a Semantic Layer to Your Codebase, Enabling AI to Evolve from "Reading Code" to "Understanding Code"
+## Local Code Retrieval And Context Runtime For Agents
 
-**Code semantics should be versioned and traceable, just like code itself**
+**Code Context Engine turns local repositories into structured context for review agents and coding agents.**
 
-git-ai is a local code understanding tool that builds a semantic layer for your codebase using advanced RAG techniques, enabling AI Agents and developers to deeply understand code structure and relationships.
+Code Context Engine is the new product direction of `git-ai`: a local code retrieval and context construction engine for review, implementation, impact analysis, and code exploration tasks. Instead of centering the product around CLI commands or MCP primitives, it centers a local TypeScript runtime and agent bundle that can assemble evidence from lexical search, symbol navigation, graph expansion, semantic reranking, and repo-level hints.
 
-### ✨ Why git-ai?
+### Why Code Context Engine?
 
-- **🔗 Advanced RAG**: Combines vector retrieval + graph retrieval for multi-dimensional semantic understanding
-- **📊 Fast & Accurate**: Optimized repo-map with PageRank-based importance scoring
-- **🔄 Always Available**: Indices travel with code, available immediately after checkout, no rebuild needed
-- **🤖 AI-Native**: MCP Server enables Claude, Trae and other Agents to deeply understand your codebase
-- **🔒 Fully Local**: Code never leaves your machine, secure and private
-- **⚡ Full Lifecycle Support**: From development to Review to refactoring, indices span the entire lifecycle
-- **📊 Blazing Fast**: 10k files indexed in < 30s, search response < 100ms
+- **Lexical First**: Exact token, substring, regex, literal string, path-aware, and language-aware retrieval are the default recall layer
+- **Agent-Oriented Context**: Returns evidence bundles and context bundles for review and implementation tasks
+- **Deep Navigation**: Combines symbol search, graph expansion, repo-map hints, and semantic reranking
+- **Fully Local**: Code and indexes stay on your machine
+- **Incremental Friendly**: Reuses the existing local indexing pipeline and graph storage
+- **Thin Adapters**: CLI and MCP remain optional adapters instead of the product core
 
 ---
 
-## ✨ Core Capabilities
+## Core Capabilities
 
-### 1️⃣ Semantic Search
+### 1. Code Context Runtime
 
-Find code using natural language, no need to remember file names or function names:
+Build task-oriented context for agents:
+
+```ts
+const engine = createCodeContextEngine({ repoRoot });
+
+const result = await engine.search.lexical({
+  query: 'authenticateUser',
+  mode: 'exact',
+  pathPattern: 'src/auth/**',
+});
+```
+
+### 2. Lexical And Structural Retrieval
+
+Find code using exact token, substring, regex, literal string, path filter, and structural graph expansion:
 
 ```bash
 git-ai ai semantic "user authentication logic"
@@ -65,9 +78,9 @@ git-ai ai semantic "database connection pool configuration"
 git-ai ai semantic "error handling middleware"
 ```
 
-### 2️⃣ Symbol Relationship Analysis
+### 3. Symbol Navigation
 
-Understand relationships between code:
+Understand relationships between definitions, references, callers, callees, and containing scopes:
 
 ```bash
 # Find function callers
@@ -80,7 +93,7 @@ git-ai ai graph callees authenticateUser
 git-ai ai graph chain authenticateUser --max-depth 3
 ```
 
-### 3️⃣ Multi-Language Support
+### 4. Multi-Language Support
 
 Supports multiple mainstream programming languages:
 
@@ -98,24 +111,14 @@ Supports multiple mainstream programming languages:
 
 ---
 
-## 💡 Design Philosophy
+## Design Philosophy
 
-git-ai is built for deep code understanding through multiple retrieval strategies:
+Code Context Engine is built around a task-first retrieval pipeline:
 
-### Advanced RAG
-
-Combines multiple retrieval methods for deeper understanding:
-- **Vector Retrieval**: Semantic similarity matching using SQ8 quantized embeddings
-- **Graph Retrieval**: Call relationship and dependency analysis via AST graphs
-- **Intelligent Fusion**: Weighted combination of retrieval strategies for optimal results
-
-### Decentralized Semantics
-
-Indices travel with code, no central server required. checkout, branch, tag—all can use consistent semantic indices immediately.
-
-### Server Mode
-
-MCP Server enables any AI Agent to invoke indices, achieving true AI-assisted development.
+- **Lexical / symbol first**: highest precision recall for review and implementation workflows
+- **Graph expand second**: callers, callees, containment, and related files deepen the context
+- **Semantic rerank last**: vector search improves recall and ranking, but is not the default entry point
+- **Runtime first**: the local runtime is the product core; CLI and MCP are optional thin adapters
 
 ---
 
