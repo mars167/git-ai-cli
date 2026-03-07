@@ -1,6 +1,7 @@
 import type { ContextBundle, ContextSection } from '../../domain/context';
 import type { TaskRequest } from '../../domain/tasks';
 import { lexicalSearch } from '../../retrieval/lexical/lexicalSearch';
+import { findDefinition, findExports } from '../../retrieval/symbol/navigation';
 import { findTestsForTask } from '../tests/testContext';
 
 function toPathPattern(pathHints?: string[]): string {
@@ -19,6 +20,22 @@ export async function buildImplementationContext(
     pathPattern: toPathPattern(request.pathHints),
     limit: 20,
   });
+  const definitions = query
+    ? await findDefinition(repoRoot, { symbol: query, lang: 'auto', limit: 10 }).catch(() => ({
+        repoRoot,
+        query,
+        mode: 'definition',
+        matches: [],
+      }))
+    : { repoRoot, query, mode: 'definition', matches: [] };
+  const exports = query
+    ? await findExports(repoRoot, { symbol: query, lang: 'auto', limit: 10 }).catch(() => ({
+        repoRoot,
+        query,
+        mode: 'exports',
+        matches: [],
+      }))
+    : { repoRoot, query, mode: 'exports', matches: [] };
   const tests = await findTestsForTask(repoRoot, request);
 
   const sections: ContextSection[] = [
@@ -34,6 +51,22 @@ export async function buildImplementationContext(
       title: 'Related Tests',
       summary: `Related tests for ${query}`,
       evidence: tests.evidence,
+    });
+  }
+
+  if (definitions.matches.length > 0) {
+    sections.push({
+      title: 'Definitions',
+      summary: `Definitions for ${query}`,
+      evidence: definitions.matches,
+    });
+  }
+
+  if (exports.matches.length > 0) {
+    sections.push({
+      title: 'Exports',
+      summary: `Exports related to ${query}`,
+      evidence: exports.matches,
     });
   }
 

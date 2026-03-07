@@ -5,7 +5,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { spawnSync } = require('node:child_process');
 
-const CLI = path.resolve(__dirname, '..', 'dist', 'bin', 'git-ai.js');
+const CLI = path.resolve(__dirname, '..', 'dist', 'bin', 'code-context-engine.js');
 
 function runOk(cmd, args, cwd) {
   const res = spawnSync(cmd, args, { cwd, encoding: 'utf-8' });
@@ -37,17 +37,15 @@ async function createRepo(baseDir, name, files) {
   return repoDir;
 }
 
-test('mcp server supports atomic tool calls via path arg', async () => {
+test('Code Context Engine MCP exposes thin runtime-centric tools', async () => {
   const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
   const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
 
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'git-ai-mcp-'));
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'cce-mcp-'));
   const repoDir = await createRepo(tmp, 'repo', {
     'src/foo.ts': [
-      'export class Foo {',
-      '  hello(name: string) {',
-      '    return `hello ${name}`;',
-      '  }',
+      'export interface FooHandler {',
+      '  handle(name: string): string;',
       '}',
       '',
       'export function helloWorld() {',
@@ -59,11 +57,16 @@ test('mcp server supports atomic tool calls via path arg', async () => {
       '}',
       '',
     ].join('\n'),
-    'README.md': '# test repo\n',
+    'test/foo.test.ts': [
+      "import { helloWorld } from '../src/foo';",
+      '',
+      "test('helloWorld', () => {",
+      "  expect(helloWorld()).toContain('hello');",
+      '});',
+      '',
+    ].join('\n'),
   });
-  const repoRootReal = await fs.realpath(repoDir);
 
-  // Pre-index the repo since index_repo tool is removed from MCP
   runOk('node', [CLI, 'ai', 'index', '--dim', '64', '--overwrite'], repoDir);
 
   const transport = new StdioClientTransport({
@@ -72,184 +75,28 @@ test('mcp server supports atomic tool calls via path arg', async () => {
     stderr: 'ignore',
   });
 
-  const client = new Client({ name: 'git-ai-test', version: '0.0.0' }, { capabilities: {} });
+  const client = new Client({ name: 'cce-test', version: '0.0.0' }, { capabilities: {} });
 
   try {
     await client.connect(transport);
     const res = await client.listTools();
-    const toolNames = new Set((res.tools ?? []).map(t => t.name));
-
-    assert.ok(toolNames.has('search_symbols'));
-    assert.ok(toolNames.has('semantic_search'));
-    assert.ok(toolNames.has('repo_map'));
-    assert.ok(toolNames.has('get_repo'));
-    assert.ok(toolNames.has('check_index'));
-    assert.ok(toolNames.has('pack_index'));
-    assert.ok(toolNames.has('unpack_index'));
-    assert.ok(toolNames.has('list_files'));
-    assert.ok(toolNames.has('read_file'));
-    assert.ok(toolNames.has('ast_graph_query'));
-    assert.ok(toolNames.has('ast_graph_find'));
-    assert.ok(toolNames.has('ast_graph_children'));
-    assert.ok(toolNames.has('ast_graph_refs'));
-    assert.ok(toolNames.has('ast_graph_callers'));
-    assert.ok(toolNames.has('ast_graph_callees'));
-    assert.ok(toolNames.has('ast_graph_chain'));
-
-    {
-      const call = await client.callTool({ name: 'get_repo', arguments: { path: repoDir } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.equal(parsed.ok, true);
-      assert.equal(await fs.realpath(parsed.repoRoot), repoRootReal);
-    }
-
-    {
-      const call = await client.callTool({ name: 'check_index', arguments: { path: repoDir } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.equal(parsed.ok, true);
-      assert.ok(parsed.expected && parsed.expected.index_schema_version);
-    }
-
-    {
-      const call = await client.callTool({
-        name: 'search_symbols',
-        arguments: {
-          path: repoDir,
-          query: 'hello',
-          mode: 'substring',
-          case_insensitive: true,
-          limit: 10,
-        },
-      });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && Array.isArray(parsed.rows));
-      assert.ok(parsed.rows.length > 0);
-    }
-
-    {
-      const call = await client.callTool({
-        name: 'search_symbols',
-        arguments: {
-          path: repoDir,
-          query: 'hello',
-          mode: 'substring',
-          case_insensitive: true,
-          limit: 10,
-          with_repo_map: true,
-          repo_map_max_files: 5,
-          repo_map_max_symbols: 2,
-        },
-      });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && parsed.repo_map && parsed.repo_map.enabled === true);
-      assert.ok(Array.isArray(parsed.repo_map.files));
-      assert.ok(parsed.repo_map.files.length > 0);
-    }
-
-    {
-      const call = await client.callTool({ name: 'semantic_search', arguments: { path: repoDir, query: 'hello world', topk: 3 } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && Array.isArray(parsed.rows));
-      assert.ok(parsed.rows.length > 0);
-    }
-
-    {
-      const call = await client.callTool({ name: 'repo_map', arguments: { path: repoDir, max_files: 5, max_symbols: 2 } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && parsed.repo_map && parsed.repo_map.enabled === true);
-      assert.ok(Array.isArray(parsed.repo_map.files));
-      assert.ok(parsed.repo_map.files.length > 0);
-    }
-
-    {
-      const call = await client.callTool({ name: 'list_files', arguments: { path: repoDir, pattern: 'src/**/*', limit: 50 } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && Array.isArray(parsed.files));
-      assert.ok(parsed.files.includes('src/foo.ts'));
-    }
-
-    {
-      const call = await client.callTool({ name: 'read_file', arguments: { path: repoDir, file: 'src/foo.ts', start_line: 1, end_line: 20 } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && typeof parsed.text === 'string');
-      assert.ok(parsed.text.includes('export class Foo'));
-    }
-
-    {
-      const call = await client.callTool({ name: 'ast_graph_query', arguments: { path: repoDir, query: "?[file] := *ast_symbol{ref_id, file, lang, name: 'Foo', kind, signature, start_line, end_line}" } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
-      assert.ok(parsed.result.rows.length > 0);
-    }
-
-    {
-      const call = await client.callTool({ name: 'ast_graph_find', arguments: { path: repoDir, prefix: 'Fo', limit: 10 } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
-      assert.ok(parsed.result.rows.length > 0);
-    }
-
-    {
-      const call = await client.callTool({ name: 'ast_graph_children', arguments: { path: repoDir, id: 'src/foo.ts', as_file: true } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
-      assert.ok(parsed.result.rows.length > 0);
-    }
-
-    {
-      const call = await client.callTool({ name: 'ast_graph_refs', arguments: { path: repoDir, name: 'helloWorld', limit: 50 } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
-      assert.ok(parsed.result.rows.some(r => String(r[3] ?? '') === 'call'));
-    }
-
-    {
-      const call = await client.callTool({ name: 'ast_graph_callers', arguments: { path: repoDir, name: 'helloWorld', limit: 50 } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
-      assert.ok(parsed.result.rows.length > 0);
-    }
-
-    {
-      const call = await client.callTool({ name: 'ast_graph_chain', arguments: { path: repoDir, name: 'run', direction: 'downstream', max_depth: 2, limit: 200 } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.ok(parsed && parsed.result && Array.isArray(parsed.result.rows));
-      assert.ok(parsed.result.rows.length > 0);
-    }
-
-    {
-      const call = await client.callTool({ name: 'pack_index', arguments: { path: repoDir, lfs: true } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.equal(parsed.ok, true);
-      const stat = await fs.stat(parsed.archivePath);
-      assert.ok(stat.size > 0);
-    }
-
-    {
-      await fs.rm(path.join(repoDir, '.git-ai', 'lancedb'), { recursive: true, force: true });
-      const call = await client.callTool({ name: 'unpack_index', arguments: { path: repoDir } });
-      const text = String(call?.content?.[0]?.text ?? '');
-      const parsed = text ? JSON.parse(text) : null;
-      assert.equal(parsed.ok, true);
-      const stat = await fs.stat(path.join(repoDir, '.git-ai', 'lancedb'));
-      assert.ok(stat.isDirectory());
-    }
+    const toolNames = new Set((res.tools ?? []).map((tool) => tool.name));
+    assert.deepEqual(
+      [...toolNames].sort(),
+      [
+        'check_index',
+        'find_extension_points',
+        'find_impact',
+        'find_tests',
+        'implementation_context',
+        'lexical_search',
+        'read_file',
+        'rebuild_index',
+        'repo_map',
+        'review_context_for_diff',
+      ].sort(),
+    );
   } finally {
-    await transport.close();
+    await client.close().catch(() => {});
   }
 });

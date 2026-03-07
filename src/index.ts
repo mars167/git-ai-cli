@@ -34,3 +34,8 @@ export type {
   LexicalSearchRequest,
   LexicalSearchResponse,
 } from './retrieval/lexical/types';
+
+export type {
+  SymbolNavigationRequest,
+  ContainingScopeRequest,
+} from './retrieval/symbol/navigation';

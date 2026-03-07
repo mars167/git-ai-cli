@@ -1,47 +1,39 @@
 ---
 name: git-ai-code-search
 description: |
-  Semantic code search and codebase understanding using git-ai MCP tools. Use when: (1) Searching for symbols, functions, or semantic concepts, (2) Understanding project architecture, (3) Analyzing call graphs and code relationships. Triggers: "find X", "search for X", "who calls X", "where is X", "understand this codebase".
+  Code Context Engine skill for local code retrieval and task-oriented context building. Use when searching for code, preparing implementation work, reviewing diffs, finding tests, or analyzing impact in a local repository.
 ---
 
-# git-ai Code Search
+# Code Context Engine Skill
 
-Semantic code search with AST analysis and change tracking.
+## Recommended Workflow
 
-## Quick Start
+1. `check_index({ path })`
+2. `repo_map({ path })` when you need a repo overview
+3. `lexical_search({ path, query, ... })` for initial precise recall
+4. Use the task tools as the main working surface:
+   - `implementation_context`
+   - `find_tests`
+   - `find_impact`
+   - `find_extension_points`
+   - `review_context_for_diff`
+5. `read_file({ path, file })` before making or suggesting edits
 
-**For Agents** - 3-step pattern:
-```
-1. check_index({ path }) → verify index exists
-2. semantic_search({ path, query }) → find relevant code  
-3. read_file({ path, file }) → read the actual code
-```
+## Retrieval Order
 
-**For Users** - build index first:
-```bash
-cd your-repo
-git-ai ai index        # build index
-git-ai ai semantic "authentication logic"  # search
-```
+- lexical / symbol first
+- graph expand second
+- semantic rerank last
 
-## Core Tools
+## Thin MCP Surface
 
-| Need | Tool | Example |
-|------|------|---------|
-| Search by meaning | `semantic_search` | `{ path, query: "error handling", topk: 10 }` |
-| Search by name | `search_symbols` | `{ path, query: "handleAuth", mode: "substring" }` |
-| Who calls X | `ast_graph_callers` | `{ path, name: "processOrder" }` |
-| What X calls | `ast_graph_callees` | `{ path, name: "processOrder" }` |
-| Call chain | `ast_graph_chain` | `{ path, name: "main", direction: "downstream" }` |
-| Project overview | `repo_map` | `{ path, max_files: 20 }` |
-
-## Rules
-
-1. **Always pass `path`** - Every tool requires explicit repository path
-2. **Check index first** - Run `check_index` before search tools
-3. **Read before modify** - Use `read_file` to understand code before changes
-
-## References
-
-- [Tool Documentation](references/tools.md)
-- [Behavioral Constraints](references/constraints.md)
+- `check_index`
+- `rebuild_index`
+- `read_file`
+- `repo_map`
+- `lexical_search`
+- `implementation_context`
+- `find_tests`
+- `find_impact`
+- `find_extension_points`
+- `review_context_for_diff`
