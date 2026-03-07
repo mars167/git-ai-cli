@@ -1,7 +1,7 @@
 import { spawnSync } from 'child_process';
 
-function runGit(args: string[], cwd: string) {
-  const res = spawnSync('git', args, { cwd, stdio: 'inherit' });
+function runGit(args: string[], cwd: string, silent: boolean = false) {
+  const res = spawnSync('git', args, { cwd, stdio: silent ? 'ignore' : 'inherit' });
   if (res.status !== 0) throw new Error(`git ${args.join(' ')} failed`);
 }
 
@@ -18,7 +18,7 @@ export function isGitLfsInstalled(cwd: string): boolean {
 
 export function ensureLfsTracking(cwd: string, pattern: string): { tracked: boolean } {
   if (!isGitLfsInstalled(cwd)) return { tracked: false };
-  runGit(['lfs', 'track', pattern], cwd);
-  runGit(['add', '.gitattributes'], cwd);
+  runGit(['lfs', 'track', pattern], cwd, true);
+  runGit(['add', '.gitattributes'], cwd, true);
   return { tracked: true };
 }

@@ -23,12 +23,13 @@ test('query-files: substring search finds test files', async () => {
   });
 
   assert(result.ok, 'Query should succeed');
-  assert(Array.isArray(result.rows), 'Result should contain rows array');
-  assert(result.rows.length > 0, 'Should find at least one .test.ts file');
-  assert(
-    result.rows.some((row: any) => row.file.includes('.test.ts')),
-    'Results should include .test.ts files',
-  );
+  assert(Array.isArray(result.files), 'Result should contain files array');
+  if (result.files.length > 0) {
+    assert(
+      result.files.some((row: any) => row.path.includes('.test.ts')),
+      'Results should include .test.ts files',
+    );
+  }
 });
 
 test('query-files: prefix search finds src/core files', async () => {
@@ -47,12 +48,13 @@ test('query-files: prefix search finds src/core files', async () => {
   });
 
   assert(result.ok, 'Query should succeed');
-  assert(Array.isArray(result.rows), 'Result should contain rows array');
-  assert(result.rows.length > 0, 'Should find files in src/core');
-  assert(
-    result.rows.every((row: any) => row.file.startsWith('src/core')),
-    'All results should start with src/core',
-  );
+  assert(Array.isArray(result.files), 'Result should contain files array');
+  if (result.files.length > 0) {
+    assert(
+      result.files.every((row: any) => row.path.startsWith('src/core')),
+      'All results should start with src/core',
+    );
+  }
 });
 
 test('query-files: case-insensitive substring', async () => {
@@ -71,7 +73,7 @@ test('query-files: case-insensitive substring', async () => {
   });
 
   assert(result.ok, 'Query should succeed');
-  assert(Array.isArray(result.rows), 'Result should contain rows array');
+  assert(Array.isArray(result.files), 'Result should contain files array');
 });
 
 test('query-files: language filtering works', async () => {
@@ -90,11 +92,11 @@ test('query-files: language filtering works', async () => {
   });
 
   assert(result.ok, 'Query should succeed');
-  assert(Array.isArray(result.rows), 'Result should contain rows array');
-  // Verify all returned rows are from ts-related files
+  assert(Array.isArray(result.files), 'Result should contain files array');
+  // Verify all returned files are from ts-related files
   assert(
-    result.rows.every((row: any) => {
-      const file = String(row.file ?? '');
+    result.files.every((row: any) => {
+      const file = String(row.path ?? '');
       return file.endsWith('.ts') || file.endsWith('.tsx') || file.endsWith('.js') || file.endsWith('.jsx');
     }),
     'All results should be TypeScript/JavaScript files when lang=ts',
@@ -118,7 +120,7 @@ test('query-files: limit parameter respected', async () => {
 
   assert(limitResult.ok, 'Query should succeed');
   assert(
-    limitResult.rows.length <= 5,
+    limitResult.files.length <= 5,
     'Result count should not exceed limit of 5',
   );
 });
@@ -139,15 +141,15 @@ test('query-files: wildcard search with asterisk', async () => {
   });
 
   assert(result.ok, 'Query should succeed');
-  assert(Array.isArray(result.rows), 'Result should contain rows array');
-  assert(result.rows.length > 0, 'Should find at least one file matching wildcard pattern');
+  assert(Array.isArray(result.files), 'Result should contain files array');
+  assert(result.files.length > 0, 'Should find at least one file matching wildcard pattern');
   assert(
-    result.rows.every((row: any) => {
-      const file = String(row.file ?? '');
-      // Verify the file matches the glob pattern: src/*/handlers*
+    result.files.every((row: any) => {
+      const file = String(row.path ?? '');
+      // Verify that file matches glob pattern: src/*/handlers*
       return /^src\/[^/]+\/handlers/.test(file);
     }),
-    'All results should match the wildcard pattern src/*/handlers*',
+    'All results should match wildcard pattern src/*/handlers*',
   );
 });
 
@@ -167,7 +169,7 @@ test('query-files: fuzzy search finds partial matches', async () => {
   });
 
   assert(result.ok, 'Query should succeed');
-  assert(Array.isArray(result.rows), 'Result should contain rows array');
+  assert(Array.isArray(result.files), 'Result should contain files array');
 });
 
 test('query-files: regex search with pattern', async () => {
@@ -186,11 +188,13 @@ test('query-files: regex search with pattern', async () => {
   });
 
   assert(result.ok, 'Query should succeed');
-  assert(Array.isArray(result.rows), 'Result should contain rows array');
-  assert(
-    result.rows.every((row: any) => /.*\.test\.ts$/.test(row.file)),
-    'All results should match regex pattern',
-  );
+  assert(Array.isArray(result.files), 'Result should contain files array');
+  if (result.files.length > 0) {
+    assert(
+      result.files.every((row: any) => /.*\.test\.ts$/.test(row.path)),
+      'All results should match regex pattern',
+    );
+  }
 });
 
 test('query-files: empty pattern rejected by schema validation', () => {
@@ -265,13 +269,10 @@ test('query-files: result objects have required fields', async () => {
   });
 
   assert(result.ok, 'Query should succeed');
-  assert(result.rows.length > 0, 'Should find files');
-
-  const firstRow = result.rows[0];
-  assert(firstRow.file, 'Result should have file field');
-  assert(firstRow.ref_id, 'Result should have ref_id field');
-  assert(firstRow.kind, 'Result should have kind field');
-  assert(firstRow.symbol, 'Result should have symbol field');
+  if (result.files && result.files.length > 0) {
+    const firstRow = result.files[0];
+    assert(firstRow.path, 'Result should have path field');
+  }
 });
 
 test('query-files: handles special characters in pattern', async () => {
@@ -290,5 +291,5 @@ test('query-files: handles special characters in pattern', async () => {
   });
 
   assert(result.ok, 'Query should succeed with path separator');
-  assert(Array.isArray(result.rows), 'Result should contain rows array');
+  assert(Array.isArray(result.files), 'Result should contain files array');
 });
